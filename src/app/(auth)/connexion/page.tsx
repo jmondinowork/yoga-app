@@ -16,7 +16,7 @@ export default function ConnexionPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await signIn("resend", { email, callbackUrl: "/mon-espace" });
+      await signIn("resend", { email, redirect: false, callbackUrl: "/mon-espace" });
       setSent(true);
     } catch {
       // Handle error
