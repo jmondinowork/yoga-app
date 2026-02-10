@@ -2,10 +2,19 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
+const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET });
+  // Auth.js v5 utilise le prefix "authjs" pour les cookies
+  const token = await getToken({
+    req,
+    secret,
+    cookieName: process.env.NODE_ENV === 'production'
+      ? '__Secure-authjs.session-token'
+      : 'authjs.session-token',
+  });
   const isLoggedIn = !!token;
 
   // Routes protégées : dashboard utilisateur
