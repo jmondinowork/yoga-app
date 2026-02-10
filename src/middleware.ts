@@ -1,9 +1,12 @@
-import { auth } from '@/lib/auth';
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 
-export default auth((req) => {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const isLoggedIn = !!req.auth;
+
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const isLoggedIn = !!token;
 
   // Routes protégées : dashboard utilisateur
   const protectedRoutes = ['/mon-espace'];
@@ -25,8 +28,7 @@ export default auth((req) => {
       return NextResponse.redirect(loginUrl);
     }
 
-    // Vérification du rôle admin via le token de session
-    if (req.auth?.user?.role !== 'ADMIN') {
+    if (token?.role !== 'ADMIN') {
       return NextResponse.redirect(new URL('/', req.nextUrl.origin));
     }
   }
@@ -38,11 +40,10 @@ export default auth((req) => {
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: [
-    // Protéger ces routes
     '/mon-espace/:path*',
     '/admin/:path*',
     '/connexion',
