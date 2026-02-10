@@ -129,7 +129,7 @@ export default function AProposPage() {
             Rejoignez-moi sur le tapis et découvrez les bienfaits du yoga.
           </p>
           <Link href="/cours">
-            <Button size="lg" className="bg-white text-button hover:bg-white/90">
+            <Button size="lg" className="bg-white !text-[color:var(--color-button)] hover:bg-white/90">
               Découvrir les cours
               <ArrowRight className="w-5 h-5" />
             </Button>
