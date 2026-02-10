@@ -34,7 +34,7 @@ export default function ConnexionPage() {
             <span className="text-white font-heading text-xl font-bold">Y</span>
           </div>
           <span className="font-heading text-3xl font-bold text-heading">
-            Yoga Flow
+            Prana Motion Yoga
           </span>
         </Link>
       </div>

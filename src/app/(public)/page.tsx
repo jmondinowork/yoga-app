@@ -17,7 +17,7 @@ import PricingTable from "@/components/pricing/PricingTable";
 import TestimonialCarousel from "@/components/home/TestimonialCarousel";
 
 export const metadata: Metadata = {
-  title: "Yoga Flow — Cours de yoga en ligne",
+  title: "Prana Motion Yoga — Cours de yoga en ligne",
   description:
     "Découvrez le yoga à votre rythme. Des cours en ligne pour tous les niveaux : Vinyasa, Hatha, Yin, Méditation. Abonnement ou achat à l'unité.",
 };
@@ -434,7 +434,7 @@ export default function HomePage() {
             <Link href="/inscription">
               <Button
                 size="lg"
-                className="bg-white text-button hover:bg-white/90"
+                className="bg-white !text-[color:var(--color-button)] hover:bg-white/90"
               >
                 Créer mon compte gratuit
                 <ArrowRight className="w-5 h-5" />

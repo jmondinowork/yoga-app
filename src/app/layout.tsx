@@ -18,8 +18,8 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   title: {
-    default: "Yoga Flow — Cours de yoga en ligne",
-    template: "%s | Yoga Flow",
+    default: "Prana Motion Yoga — Cours de yoga en ligne",
+    template: "%s | Prana Motion Yoga",
   },
   description:
     "Découvrez le yoga à votre rythme avec des cours en ligne accessibles à tous les niveaux. Vinyasa, Hatha, Yin, Méditation et plus encore.",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "fr_FR",
-    siteName: "Yoga Flow",
+    siteName: "Prana Motion Yoga",
   },
 };
 

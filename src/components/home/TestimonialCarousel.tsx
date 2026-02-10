@@ -14,7 +14,7 @@ const defaultTestimonials: Testimonial[] = [
   {
     name: "Sophie M.",
     content:
-      "Je pratique le yoga depuis 6 mois avec Yoga Flow et les résultats sont incroyables. Les cours sont parfaitement structurés et le suivi de progression me motive à continuer.",
+      "Je pratique le yoga depuis 6 mois avec Prana Motion Yoga et les résultats sont incroyables. Les cours sont parfaitement structurés et le suivi de progression me motive à continuer.",
     rating: 5,
   },
   {

@@ -38,7 +38,7 @@ export default function Navbar({ user }: NavbarProps) {
               <span className="text-white font-heading text-lg font-bold">Y</span>
             </div>
             <span className="font-heading text-2xl font-bold text-heading group-hover:text-button transition-colors">
-              Yoga Flow
+              Prana Motion Yoga
             </span>
           </Link>
 

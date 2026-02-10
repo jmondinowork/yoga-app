@@ -13,7 +13,7 @@ export default function Footer() {
                 <span className="text-white font-heading text-lg font-bold">Y</span>
               </div>
               <span className="font-heading text-2xl font-bold text-white">
-                Yoga Flow
+                Prana Motion Yoga
               </span>
             </Link>
             <p className="text-sm leading-relaxed">
@@ -129,7 +129,7 @@ export default function Footer() {
 
         <div className="mt-12 pt-8 border-t border-white/10 text-center">
           <p className="text-sm text-primary/50">
-            © {new Date().getFullYear()} Yoga Flow. Tous droits réservés.
+            © {new Date().getFullYear()} Prana Motion Yoga. Tous droits réservés.
           </p>
         </div>
       </div>
