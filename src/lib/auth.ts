@@ -20,6 +20,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   pages: {
     signIn: "/connexion",
     newUser: "/mon-espace",
+    verifyRequest: "/verification",
   },
   callbacks: {
     async jwt({ token, user }) {
