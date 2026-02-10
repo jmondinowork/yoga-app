@@ -28,6 +28,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     verifyRequest: "/verification",
   },
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      // Si l'URL est relative, la préfixer avec baseUrl
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      // Si l'URL est du même domaine, la garder
+      if (new URL(url).origin === baseUrl) return url;
+      // Par défaut, rediriger vers /mon-espace
+      return `${baseUrl}/mon-espace`;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;

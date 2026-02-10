@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { Menu, X, User, LogOut } from "lucide-react";
 import Button from "@/components/ui/Button";
 
@@ -76,15 +77,14 @@ export default function Navbar({ user }: NavbarProps) {
                     Mon espace
                   </Button>
                 </Link>
-                <form action="/api/auth/signout" method="POST">
-                  <button
-                    type="submit"
+                <button
+                    type="button"
+                    onClick={() => signOut({ callbackUrl: "/" })}
                     className="p-2 rounded-xl text-muted hover:text-heading hover:bg-primary/30 transition-colors cursor-pointer"
                     title="Se déconnecter"
                   >
                     <LogOut className="w-4 h-4" />
                   </button>
-                </form>
               </div>
             ) : (
               <div className="flex items-center gap-3">
