@@ -1,28 +1,23 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import CourseCard from "@/components/courses/CourseCard";
 import FilterBar, { FilterState } from "@/components/courses/FilterBar";
 
-// Données de démo
-const allCourses = [
-  { slug: "salutation-au-soleil", title: "Salutation au Soleil — Séance matinale", thumbnail: null, duration: 20, level: "BEGINNER" as const, theme: "Vinyasa", isFree: true, price: null },
-  { slug: "yin-yoga-relaxation", title: "Yin Yoga — Relaxation profonde", thumbnail: null, duration: 45, level: "BEGINNER" as const, theme: "Yin Yoga", isFree: false, price: 9.99 },
-  { slug: "vinyasa-flow-intermediaire", title: "Vinyasa Flow — Énergie & Force", thumbnail: null, duration: 35, level: "INTERMEDIATE" as const, theme: "Vinyasa", isFree: false, price: null },
-  { slug: "meditation-guidee-stress", title: "Méditation guidée — Gestion du stress", thumbnail: null, duration: 15, level: "BEGINNER" as const, theme: "Méditation", isFree: true, price: null },
-  { slug: "hatha-yoga-equilibre", title: "Hatha Yoga — Équilibre & Souplesse", thumbnail: null, duration: 40, level: "INTERMEDIATE" as const, theme: "Hatha", isFree: false, price: 12.99 },
-  { slug: "yoga-avance-inversions", title: "Inversions — Défie la gravité", thumbnail: null, duration: 50, level: "ADVANCED" as const, theme: "Vinyasa", isFree: false, price: null },
-  { slug: "yoga-doux-matin", title: "Yoga doux — Réveil en douceur", thumbnail: null, duration: 25, level: "BEGINNER" as const, theme: "Hatha", isFree: false, price: 7.99 },
-  { slug: "power-yoga-core", title: "Power Yoga — Renfort du core", thumbnail: null, duration: 40, level: "ADVANCED" as const, theme: "Power Yoga", isFree: false, price: 14.99 },
-  { slug: "meditation-pleine-conscience", title: "Méditation de pleine conscience", thumbnail: null, duration: 20, level: "BEGINNER" as const, theme: "Méditation", isFree: true, price: null },
-  { slug: "yin-yoga-hanches", title: "Yin Yoga — Ouverture des hanches", thumbnail: null, duration: 50, level: "INTERMEDIATE" as const, theme: "Yin Yoga", isFree: false, price: 11.99 },
-  { slug: "pranayama-respiration", title: "Pranayama — L'art de la respiration", thumbnail: null, duration: 15, level: "BEGINNER" as const, theme: "Respiration", isFree: false, price: 6.99 },
-  { slug: "yoga-restauratif-soir", title: "Yoga restauratif — Séance du soir", thumbnail: null, duration: 30, level: "BEGINNER" as const, theme: "Restauratif", isFree: false, price: 8.99 },
-];
-
-const themes = [...new Set(allCourses.map((c) => c.theme))].sort();
+interface Course {
+  slug: string;
+  title: string;
+  thumbnail: string | null;
+  duration: number;
+  level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+  theme: string;
+  price: number | null;
+  includedInSubscription: boolean;
+}
 
 export default function CoursPageClient() {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     theme: "",
@@ -30,23 +25,49 @@ export default function CoursPageClient() {
     duration: "",
   });
 
+  const fetchCourses = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "100" });
+      if (filters.theme) params.set("theme", filters.theme);
+      if (filters.level) params.set("level", filters.level);
+      if (filters.search) params.set("search", filters.search);
+
+      const res = await fetch(`/api/courses?${params}`);
+      const data = await res.json();
+      setCourses(data.courses || []);
+    } catch {
+      console.error("Erreur lors du chargement des cours");
+    } finally {
+      setLoading(false);
+    }
+  }, [filters.theme, filters.level, filters.search]);
+
+  useEffect(() => {
+    fetchCourses();
+  }, [fetchCourses]);
+
+  // Filtrage durée côté client (l'API ne le supporte pas)
   const filteredCourses = useMemo(() => {
-    return allCourses.filter((course) => {
-      if (filters.search && !course.title.toLowerCase().includes(filters.search.toLowerCase())) {
-        return false;
-      }
-      if (filters.theme && course.theme !== filters.theme) return false;
-      if (filters.level && course.level !== filters.level) return false;
-      if (filters.duration && course.duration > parseInt(filters.duration)) return false;
-      return true;
-    });
-  }, [filters]);
+    if (!filters.duration) return courses;
+    return courses.filter((c) => c.duration <= parseInt(filters.duration));
+  }, [courses, filters.duration]);
+
+  // Extraire les thèmes uniques pour le FilterBar
+  const themes = useMemo(() => {
+    return [...new Set(courses.map((c) => c.theme))].sort();
+  }, [courses]);
 
   return (
     <>
       <FilterBar themes={themes} onFilterChange={setFilters} />
 
-      {filteredCourses.length === 0 ? (
+      {loading ? (
+        <div className="text-center py-20">
+          <div className="animate-spin w-8 h-8 border-4 border-button border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-muted">Chargement des cours...</p>
+        </div>
+      ) : filteredCourses.length === 0 ? (
         <div className="text-center py-20">
           <span className="text-6xl block mb-4">🔍</span>
           <h3 className="font-heading text-xl font-semibold text-heading mb-2">

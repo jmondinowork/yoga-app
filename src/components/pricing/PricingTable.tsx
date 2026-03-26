@@ -1,6 +1,9 @@
+"use client";
+
 import { Check } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
+import PurchaseButton from "@/components/courses/PurchaseButton";
 import Link from "next/link";
 
 interface PricingPlan {
@@ -10,7 +13,7 @@ interface PricingPlan {
   description: string;
   features: string[];
   badge?: string;
-  priceId?: string;
+  planId?: string;
 }
 
 interface PricingTableProps {
@@ -34,13 +37,14 @@ const defaultPlans: PricingPlan[] = [
     name: "Mensuel",
     price: 19.99,
     interval: "par mois",
-    description: "Accès illimité à tous les cours",
+    description: "Accès illimité à tous les cours vidéo",
     features: [
-      "Accès à tous les cours",
+      "Accès à tous les cours vidéo",
       "Nouvelles vidéos chaque semaine",
       "Suivi de progression",
       "Annulation à tout moment",
     ],
+    planId: "monthly",
   },
   {
     name: "Annuel",
@@ -48,12 +52,13 @@ const defaultPlans: PricingPlan[] = [
     interval: "par mois",
     description: "Le meilleur tarif — économisez 25%",
     features: [
-      "Tout le plan mensuel",
+      "Tous les cours vidéo en illimité",
       "Économisez 25%",
       "Accès prioritaire aux nouveautés",
-      "Contenus exclusifs",
+      "Suivi de progression",
     ],
     badge: "Meilleure offre",
+    planId: "annual",
   },
 ];
 
@@ -108,15 +113,27 @@ export default function PricingTable({ plans = defaultPlans }: PricingTableProps
               ))}
             </ul>
 
-            <Link href="/inscription">
-              <Button
+            {plan.planId ? (
+              <PurchaseButton
+                type="subscription"
+                planId={plan.planId}
                 variant={isPopular ? "primary" : "outline"}
                 className="w-full"
                 size="lg"
               >
-                {plan.name === "À l'unité" ? "Parcourir les cours" : "Commencer"}
-              </Button>
-            </Link>
+                Commencer
+              </PurchaseButton>
+            ) : (
+              <Link href="/cours">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
+                >
+                  Parcourir les cours
+                </Button>
+              </Link>
+            )}
           </div>
         );
       })}

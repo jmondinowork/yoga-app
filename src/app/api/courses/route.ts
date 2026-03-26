@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getPresignedUrl } from '@/lib/r2';
 
 // GET - Liste des cours publics
 export async function GET(req: NextRequest) {
@@ -46,14 +47,29 @@ export async function GET(req: NextRequest) {
         level: true,
         theme: true,
         price: true,
-        isFree: true,
+        includedInSubscription: true,
       },
     }),
     prisma.course.count({ where }),
   ]);
 
+  // Générer les presigned URLs pour les thumbnails R2
+  const coursesWithThumbnails = await Promise.all(
+    courses.map(async (course) => {
+      if (course.thumbnail && !course.thumbnail.startsWith('http')) {
+        try {
+          const thumbnailUrl = await getPresignedUrl(course.thumbnail, 7200);
+          return { ...course, thumbnail: thumbnailUrl };
+        } catch {
+          return { ...course, thumbnail: null };
+        }
+      }
+      return course;
+    })
+  );
+
   return NextResponse.json({
-    courses,
+    courses: coursesWithThumbnails,
     pagination: {
       page,
       limit,

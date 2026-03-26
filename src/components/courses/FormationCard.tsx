@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, Clock } from "lucide-react";
+import { BookOpen, Clock, Video, FileText } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 
 interface FormationCardProps {
@@ -8,8 +8,9 @@ interface FormationCardProps {
   description: string;
   thumbnail?: string | null;
   price?: number | null;
-  courseCount: number;
+  videoCount: number;
   totalDuration: number;
+  hasBooklet?: boolean;
 }
 
 export default function FormationCard({
@@ -18,8 +19,9 @@ export default function FormationCard({
   description,
   thumbnail,
   price,
-  courseCount,
+  videoCount,
   totalDuration,
+  hasBooklet,
 }: FormationCardProps) {
   return (
     <Link href={`/formations/${slug}`} className="group block">
@@ -39,13 +41,11 @@ export default function FormationCard({
           )}
 
           {/* Price */}
-          <div className="absolute top-3 right-3">
-            {price ? (
+          {price && (
+            <div className="absolute top-3 right-3">
               <Badge variant="premium">{price} €</Badge>
-            ) : (
-              <Badge variant="premium">Inclus dans l&apos;abonnement</Badge>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -56,13 +56,21 @@ export default function FormationCard({
           <p className="text-sm text-text line-clamp-2">{description}</p>
           <div className="flex items-center gap-4 text-sm text-muted">
             <span className="flex items-center gap-1.5">
-              <BookOpen className="w-4 h-4" />
-              {courseCount} cours
+              <Video className="w-4 h-4" />
+              {videoCount} vidéo{videoCount > 1 ? "s" : ""}
             </span>
             <span className="flex items-center gap-1.5">
               <Clock className="w-4 h-4" />
-              {totalDuration} min
+              {Math.floor(totalDuration / 60) > 0
+                ? `${Math.floor(totalDuration / 60)}h${totalDuration % 60 > 0 ? `${totalDuration % 60}` : ""}`
+                : `${totalDuration}min`}
             </span>
+            {hasBooklet && (
+              <span className="flex items-center gap-1.5">
+                <FileText className="w-4 h-4" />
+                Livret PDF
+              </span>
+            )}
           </div>
         </div>
       </div>

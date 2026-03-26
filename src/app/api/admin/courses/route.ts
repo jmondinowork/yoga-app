@@ -14,7 +14,7 @@ const courseSchema = z.object({
   level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']),
   theme: z.string().min(2),
   price: z.number().min(0).optional(),
-  isFree: z.boolean().default(false),
+  includedInSubscription: z.boolean().default(true),
   isPublished: z.boolean().default(false),
   sortOrder: z.number().int().default(0),
 });
@@ -109,6 +109,47 @@ export async function POST(req: NextRequest) {
       );
     }
     console.error('[ADMIN_COURSE_CREATE_ERROR]', error);
+    return NextResponse.json(
+      { error: 'Erreur interne du serveur.' },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH - Mise à jour en lot (multi-select)
+const bulkUpdateSchema = z.object({
+  ids: z.array(z.string()).min(1),
+  data: z.object({
+    price: z.number().min(0).optional().nullable(),
+    includedInSubscription: z.boolean().optional(),
+    isPublished: z.boolean().optional(),
+  }),
+});
+
+export async function PATCH(req: NextRequest) {
+  const session = await checkAdmin();
+  if (!session) {
+    return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
+  }
+
+  try {
+    const body = await req.json();
+    const { ids, data } = bulkUpdateSchema.parse(body);
+
+    await prisma.course.updateMany({
+      where: { id: { in: ids } },
+      data,
+    });
+
+    return NextResponse.json({ success: true, count: ids.length });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Données invalides', details: error.issues },
+        { status: 400 }
+      );
+    }
+    console.error('[ADMIN_COURSES_BULK_UPDATE_ERROR]', error);
     return NextResponse.json(
       { error: 'Erreur interne du serveur.' },
       { status: 500 }

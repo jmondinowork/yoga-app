@@ -14,9 +14,9 @@ const stats = [
 
 const recentUsers = [
   { name: "Sophie Martin", email: "sophie@example.com", date: "Il y a 2h", status: "Abonné" },
-  { name: "Thomas Leroy", email: "thomas@example.com", date: "Il y a 5h", status: "Gratuit" },
+  { name: "Thomas Leroy", email: "thomas@example.com", date: "Il y a 5h", status: "Inscrit" },
   { name: "Marie Dupont", email: "marie@example.com", date: "Il y a 1j", status: "Abonné" },
-  { name: "Pierre Robert", email: "pierre@example.com", date: "Il y a 2j", status: "Gratuit" },
+  { name: "Pierre Robert", email: "pierre@example.com", date: "Il y a 2j", status: "Inscrit" },
 ];
 
 const topCourses = [

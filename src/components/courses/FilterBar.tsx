@@ -54,7 +54,7 @@ export default function FilterBar({ themes, onFilterChange }: FilterBarProps) {
   const hasActiveFilters = filters.theme || filters.level || filters.duration;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 mb-4">
       {/* Search bar */}
       <div className="flex gap-3">
         <div className="flex-1 relative">

@@ -1,132 +1,258 @@
 "use client";
 
-import { DollarSign, Edit } from "lucide-react";
-import Button from "@/components/ui/Button";
+import { useState, useEffect } from "react";
+import { CreditCard, Users, ShoppingBag, TrendingUp } from "lucide-react";
 import Badge from "@/components/ui/Badge";
-import Input from "@/components/ui/Input";
+
+interface Subscription {
+  id: string;
+  plan: "MONTHLY" | "ANNUAL";
+  status: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  createdAt: string;
+  user: { id: string; name: string | null; email: string };
+}
+
+interface Purchase {
+  id: string;
+  amount: number;
+  createdAt: string;
+  user: { id: string; name: string | null; email: string };
+  course: { id: string; title: string; slug: string } | null;
+  formation: { id: string; title: string; slug: string } | null;
+}
+
+interface Stats {
+  monthlyActive: number;
+  annualActive: number;
+  totalPurchases: number;
+  purchaseRevenue: number;
+}
+
+const planLabels: Record<string, string> = {
+  MONTHLY: "Mensuel",
+  ANNUAL: "Annuel",
+};
+
+const statusLabels: Record<string, string> = {
+  ACTIVE: "Actif",
+  CANCELED: "Annulé",
+  PAST_DUE: "Impayé",
+  EXPIRED: "Expiré",
+};
+
+const statusVariants: Record<string, "success" | "warning" | "premium"> = {
+  ACTIVE: "success",
+  CANCELED: "warning",
+  PAST_DUE: "premium",
+  EXPIRED: "warning",
+};
 
 export default function AdminAbonnementsPage() {
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [stats, setStats] = useState<Stats>({ monthlyActive: 0, annualActive: 0, totalPurchases: 0, purchaseRevenue: 0 });
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"subscriptions" | "purchases">("subscriptions");
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const res = await fetch("/api/admin/subscriptions");
+        const data = await res.json();
+        setSubscriptions(data.subscriptions || []);
+        setPurchases(data.purchases || []);
+        setStats(data.stats || stats);
+      } catch {
+        console.error("Erreur lors du chargement");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const mrrMonthly = stats.monthlyActive * 19.99;
+  const mrrAnnual = stats.annualActive * 14.99;
+  const mrrTotal = mrrMonthly + mrrAnnual;
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="font-heading text-3xl font-bold text-heading mb-2">
-          Gestion des abonnements
+          Abonnements & Achats
         </h1>
-        <p className="text-muted">Configurez les plans et tarifs de votre plateforme</p>
+        <p className="text-muted">Suivez vos revenus et gérez les abonnements</p>
       </div>
 
-      {/* Plans */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {[
-          {
-            name: "À l'unité",
-            description: "Chaque cours peut être vendu individuellement",
-            priceLabel: "Variable",
-            details: "Prix défini par cours dans la gestion des cours",
-            active: true,
-          },
-          {
-            name: "Abonnement mensuel",
-            description: "Accès illimité renouvelé chaque mois",
-            priceLabel: "19,99 €/mois",
-            details: "342 abonnés actifs",
-            active: true,
-            stripeId: "price_xxxxx_monthly",
-          },
-          {
-            name: "Abonnement annuel",
-            description: "Accès illimité avec 25% de réduction",
-            priceLabel: "14,99 €/mois (179,88 €/an)",
-            details: "128 abonnés actifs",
-            active: true,
-            badge: "Meilleure offre",
-            stripeId: "price_xxxxx_annual",
-          },
-        ].map((plan) => (
-          <div
-            key={plan.name}
-            className="bg-card rounded-2xl border border-border p-6 space-y-4"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-heading text-lg font-semibold text-heading">
-                  {plan.name}
-                </h3>
-                {plan.badge && <Badge variant="premium" className="mt-1">{plan.badge}</Badge>}
-              </div>
-              <Badge variant={plan.active ? "success" : "warning"}>
-                {plan.active ? "Actif" : "Inactif"}
-              </Badge>
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-card rounded-2xl border border-border p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+              <Users className="w-5 h-5 text-green-600" />
             </div>
-            <p className="text-sm text-text">{plan.description}</p>
-            <div>
-              <p className="font-heading text-2xl font-bold text-heading">
-                {plan.priceLabel}
-              </p>
-              <p className="text-xs text-muted mt-1">{plan.details}</p>
-            </div>
-            {plan.stripeId && (
-              <p className="text-xs text-muted font-mono">Stripe: {plan.stripeId}</p>
-            )}
-            <Button variant="outline" size="sm" className="w-full">
-              <Edit className="w-4 h-4" />
-              Modifier
-            </Button>
+            <span className="text-sm text-muted">Abonnés mensuels</span>
           </div>
-        ))}
-      </div>
-
-      {/* Stripe sync info */}
-      <div className="bg-accent-light/20 rounded-2xl border border-button/20 p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <DollarSign className="w-6 h-6 text-button" />
-          <h2 className="font-heading text-xl font-semibold text-heading">
-            Intégration Stripe
-          </h2>
+          <p className="font-heading text-3xl font-bold text-heading">{stats.monthlyActive}</p>
+          <p className="text-xs text-muted mt-1">{mrrMonthly.toFixed(2)} €/mois</p>
         </div>
-        <p className="text-sm text-text">
-          Les modifications de prix doivent être synchronisées avec votre dashboard Stripe.
-          Modifiez les prix dans Stripe, puis mettez à jour les Price IDs dans vos variables d&apos;environnement.
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
-          <Input
-            id="monthlyPriceId"
-            label="Stripe Monthly Price ID"
-            placeholder="price_xxx"
-            defaultValue="price_xxxxx_monthly"
-          />
-          <Input
-            id="annualPriceId"
-            label="Stripe Annual Price ID"
-            placeholder="price_xxx"
-            defaultValue="price_xxxxx_annual"
-          />
-        </div>
-        <Button variant="outline" size="sm">
-          Sauvegarder les modifications
-        </Button>
-      </div>
-
-      {/* Revenue stats */}
-      <div className="bg-card rounded-2xl border border-border p-6">
-        <h2 className="font-heading text-xl font-semibold text-heading mb-4">
-          Aperçu des revenus
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          {[
-            { label: "Mensuel actifs", value: "342", revenue: "6 838 €/mois" },
-            { label: "Annuels actifs", value: "128", revenue: "23 025 €/an" },
-            { label: "Achats uniques", value: "567", revenue: "5 670 €" },
-            { label: "MRR total", value: "8 756 €", revenue: "estimé" },
-          ].map((stat) => (
-            <div key={stat.label} className="text-center p-4 bg-primary/10 rounded-xl">
-              <p className="font-heading text-2xl font-bold text-heading">{stat.value}</p>
-              <p className="text-sm text-text font-medium">{stat.label}</p>
-              <p className="text-xs text-muted">{stat.revenue}</p>
+        <div className="bg-card rounded-2xl border border-border p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+              <CreditCard className="w-5 h-5 text-blue-600" />
             </div>
-          ))}
+            <span className="text-sm text-muted">Abonnés annuels</span>
+          </div>
+          <p className="font-heading text-3xl font-bold text-heading">{stats.annualActive}</p>
+          <p className="text-xs text-muted mt-1">{mrrAnnual.toFixed(2)} €/mois</p>
+        </div>
+        <div className="bg-card rounded-2xl border border-border p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+              <ShoppingBag className="w-5 h-5 text-purple-600" />
+            </div>
+            <span className="text-sm text-muted">Achats unitaires</span>
+          </div>
+          <p className="font-heading text-3xl font-bold text-heading">{stats.totalPurchases}</p>
+          <p className="text-xs text-muted mt-1">{stats.purchaseRevenue.toFixed(2)} € au total</p>
+        </div>
+        <div className="bg-card rounded-2xl border border-border p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-amber-600" />
+            </div>
+            <span className="text-sm text-muted">MRR total</span>
+          </div>
+          <p className="font-heading text-3xl font-bold text-heading">{mrrTotal.toFixed(2)} €</p>
+          <p className="text-xs text-muted mt-1">estimé</p>
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-primary/20 rounded-xl p-1 w-fit">
+        <button
+          onClick={() => setTab("subscriptions")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            tab === "subscriptions"
+              ? "bg-card text-heading shadow-sm"
+              : "text-muted hover:text-text"
+          }`}
+        >
+          Abonnements ({subscriptions.length})
+        </button>
+        <button
+          onClick={() => setTab("purchases")}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+            tab === "purchases"
+              ? "bg-card text-heading shadow-sm"
+              : "text-muted hover:text-text"
+          }`}
+        >
+          Achats ({purchases.length})
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12 text-muted">Chargement...</div>
+      ) : tab === "subscriptions" ? (
+        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+          {subscriptions.length === 0 ? (
+            <div className="text-center py-12 text-muted">Aucun abonnement</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-primary/20">
+                    <th className="text-left p-4 text-sm font-medium text-heading">Utilisateur</th>
+                    <th className="text-left p-4 text-sm font-medium text-heading">Plan</th>
+                    <th className="text-left p-4 text-sm font-medium text-heading">Statut</th>
+                    <th className="text-left p-4 text-sm font-medium text-heading">Fin de période</th>
+                    <th className="text-left p-4 text-sm font-medium text-heading">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {subscriptions.map((sub) => (
+                    <tr key={sub.id} className="hover:bg-primary/10 transition-colors">
+                      <td className="p-4">
+                        <p className="font-medium text-heading">{sub.user.name || "—"}</p>
+                        <p className="text-xs text-muted">{sub.user.email}</p>
+                      </td>
+                      <td className="p-4">
+                        <Badge variant={sub.plan === "ANNUAL" ? "premium" : "default"}>
+                          {planLabels[sub.plan]}
+                        </Badge>
+                      </td>
+                      <td className="p-4">
+                        <Badge variant={statusVariants[sub.status] || "warning"}>
+                          {statusLabels[sub.status] || sub.status}
+                        </Badge>
+                        {sub.cancelAtPeriodEnd && (
+                          <span className="text-xs text-red-500 ml-2">Annulation prévue</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-sm text-text">
+                        {new Date(sub.currentPeriodEnd).toLocaleDateString("fr-FR")}
+                      </td>
+                      <td className="p-4 text-sm text-muted">
+                        {new Date(sub.createdAt).toLocaleDateString("fr-FR")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-card rounded-2xl border border-border overflow-hidden">
+          {purchases.length === 0 ? (
+            <div className="text-center py-12 text-muted">Aucun achat</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-primary/20">
+                    <th className="text-left p-4 text-sm font-medium text-heading">Utilisateur</th>
+                    <th className="text-left p-4 text-sm font-medium text-heading">Article</th>
+                    <th className="text-left p-4 text-sm font-medium text-heading">Type</th>
+                    <th className="text-left p-4 text-sm font-medium text-heading">Montant</th>
+                    <th className="text-left p-4 text-sm font-medium text-heading">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {purchases.map((purchase) => (
+                    <tr key={purchase.id} className="hover:bg-primary/10 transition-colors">
+                      <td className="p-4">
+                        <p className="font-medium text-heading">{purchase.user.name || "—"}</p>
+                        <p className="text-xs text-muted">{purchase.user.email}</p>
+                      </td>
+                      <td className="p-4">
+                        <p className="font-medium text-heading">
+                          {purchase.course?.title || purchase.formation?.title || "—"}
+                        </p>
+                      </td>
+                      <td className="p-4">
+                        <Badge variant={purchase.formation ? "premium" : "default"}>
+                          {purchase.formation ? "Formation" : "Cours"}
+                        </Badge>
+                      </td>
+                      <td className="p-4 text-sm font-medium text-heading">
+                        {purchase.amount.toFixed(2)} €
+                      </td>
+                      <td className="p-4 text-sm text-muted">
+                        {new Date(purchase.createdAt).toLocaleDateString("fr-FR")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

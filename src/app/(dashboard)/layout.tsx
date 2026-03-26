@@ -2,10 +2,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import Navbar from "@/components/layout/Navbar";
-import { User, Settings, ShoppingBag, LayoutDashboard } from "lucide-react";
+import { User, Settings, BookOpen, LayoutDashboard, Play, ShoppingBag } from "lucide-react";
 
 const dashboardLinks = [
   { href: "/mon-espace", label: "Tableau de bord", icon: LayoutDashboard },
+  { href: "/mon-espace/formations", label: "Formations", icon: BookOpen },
+  { href: "/mon-espace/cours", label: "Cours vidéo", icon: Play },
   { href: "/mon-espace/mes-achats", label: "Mes achats", icon: ShoppingBag },
   { href: "/mon-espace/parametres", label: "Paramètres", icon: Settings },
 ];

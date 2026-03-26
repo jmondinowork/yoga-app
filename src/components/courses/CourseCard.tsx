@@ -11,7 +11,7 @@ interface CourseCardProps {
   level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
   theme: string;
   price?: number | null;
-  isFree: boolean;
+  includedInSubscription?: boolean;
   isLocked?: boolean;
   progress?: number;
 }
@@ -36,7 +36,7 @@ export default function CourseCard({
   level,
   theme,
   price,
-  isFree,
+  includedInSubscription = true,
   isLocked = false,
   progress,
 }: CourseCardProps) {
@@ -70,15 +70,13 @@ export default function CourseCard({
             {duration} min
           </div>
 
-          {/* Price/Free badge */}
+          {/* Price badge */}
           <div className="absolute top-2 left-2">
-            {isFree ? (
-              <Badge variant="free">Gratuit</Badge>
-            ) : price ? (
+            {price ? (
               <Badge variant="premium">{price} €</Badge>
-            ) : (
+            ) : includedInSubscription ? (
               <Badge variant="premium">Abonnement</Badge>
-            )}
+            ) : null}
           </div>
         </div>
 

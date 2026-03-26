@@ -1,8 +1,118 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { stripe, PLANS } from '@/lib/stripe';
+import { SIMULATE_PAYMENTS, stripe, PLANS } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 
+// ─── Simulation : crée directement les enregistrements en base ───
+async function handleSimulatedCheckout(
+  type: string,
+  planId: string | undefined,
+  courseId: string | undefined,
+  userId: string,
+  baseUrl: string
+) {
+  // Abonnement simulé
+  if (type === 'subscription') {
+    const plan = PLANS.find((p) => p.id === planId);
+    if (!plan) {
+      return NextResponse.json({ error: 'Plan introuvable.' }, { status: 400 });
+    }
+
+    const existingSub = await prisma.subscription.findUnique({
+      where: { userId },
+    });
+    if (existingSub?.status === 'ACTIVE' && !existingSub.cancelAtPeriodEnd) {
+      return NextResponse.json(
+        { error: 'Vous avez déjà un abonnement actif.' },
+        { status: 400 }
+      );
+    }
+
+    const now = new Date();
+    const periodEnd = new Date(now);
+    if (plan.id === 'annual') {
+      periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+    } else {
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+    }
+
+    await prisma.subscription.upsert({
+      where: { userId },
+      create: {
+        userId,
+        plan: plan.id === 'annual' ? 'ANNUAL' : 'MONTHLY',
+        status: 'ACTIVE',
+        stripeSubscriptionId: `sim_sub_${crypto.randomUUID()}`,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+      },
+      update: {
+        plan: plan.id === 'annual' ? 'ANNUAL' : 'MONTHLY',
+        status: 'ACTIVE',
+        stripeSubscriptionId: `sim_sub_${crypto.randomUUID()}`,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        cancelAtPeriodEnd: false,
+      },
+    });
+
+    return NextResponse.json({
+      url: `${baseUrl}/mon-espace?success=true&type=subscription`,
+    });
+  }
+
+  // Achat unitaire simulé
+  if (type === 'course' || type === 'formation') {
+    let item: { id: string; slug: string; price: number | null } | null = null;
+
+    if (type === 'course') {
+      item = await prisma.course.findUnique({
+        where: { id: courseId },
+        select: { id: true, slug: true, price: true },
+      });
+      if (!item) return NextResponse.json({ error: 'Cours introuvable.' }, { status: 404 });
+    } else {
+      item = await prisma.formation.findUnique({
+        where: { id: courseId },
+        select: { id: true, slug: true, price: true },
+      });
+      if (!item) return NextResponse.json({ error: 'Formation introuvable.' }, { status: 404 });
+    }
+
+    const existingPurchase = await prisma.purchase.findFirst({
+      where: {
+        userId,
+        ...(type === 'course' ? { courseId: item.id } : { formationId: item.id }),
+      },
+    });
+    if (existingPurchase) {
+      return NextResponse.json(
+        { error: 'Vous avez déjà acheté cet élément.' },
+        { status: 400 }
+      );
+    }
+
+    await prisma.purchase.create({
+      data: {
+        userId,
+        ...(type === 'course' ? { courseId: item.id } : { formationId: item.id }),
+        amount: item.price || 0,
+        stripePaymentId: `sim_pay_${crypto.randomUUID()}`,
+      },
+    });
+
+    const successUrl =
+      type === 'course'
+        ? `${baseUrl}/cours/${item.slug}?success=true`
+        : `${baseUrl}/formations/${item.slug}?success=true`;
+
+    return NextResponse.json({ url: successUrl });
+  }
+
+  return NextResponse.json({ error: "Type d'achat invalide." }, { status: 400 });
+}
+
+// ─── Route principale ───
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -28,6 +138,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+    // ─── Mode simulation ───
+    if (SIMULATE_PAYMENTS) {
+      return handleSimulatedCheckout(type, planId, courseId, user.id, baseUrl);
+    }
+
+    // ─── Mode Stripe réel ───
+
     // Créer ou récupérer le client Stripe
     let stripeCustomerId = user.stripeCustomerId;
 
@@ -47,8 +166,6 @@ export async function POST(req: NextRequest) {
         data: { stripeCustomerId },
       });
     }
-
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
     // Abonnement
     if (type === 'subscription') {
@@ -100,13 +217,6 @@ export async function POST(req: NextRequest) {
           return NextResponse.json(
             { error: 'Cours introuvable.' },
             { status: 404 }
-          );
-        }
-
-        if (item.isFree) {
-          return NextResponse.json(
-            { error: 'Ce cours est gratuit.' },
-            { status: 400 }
           );
         }
 

@@ -31,8 +31,7 @@ const featuredCourses = [
     duration: 20,
     level: "BEGINNER" as const,
     theme: "Vinyasa",
-    isFree: true,
-    price: null,
+    price: 7.99,
   },
   {
     slug: "yin-yoga-relaxation",
@@ -41,7 +40,6 @@ const featuredCourses = [
     duration: 45,
     level: "BEGINNER" as const,
     theme: "Yin Yoga",
-    isFree: false,
     price: 9.99,
   },
   {
@@ -51,8 +49,7 @@ const featuredCourses = [
     duration: 35,
     level: "INTERMEDIATE" as const,
     theme: "Vinyasa",
-    isFree: false,
-    price: null,
+    price: 12.99,
   },
   {
     slug: "meditation-guidee-stress",
@@ -61,8 +58,7 @@ const featuredCourses = [
     duration: 15,
     level: "BEGINNER" as const,
     theme: "Méditation",
-    isFree: true,
-    price: null,
+    price: 5.99,
   },
   {
     slug: "hatha-yoga-equilibre",
@@ -71,7 +67,6 @@ const featuredCourses = [
     duration: 40,
     level: "INTERMEDIATE" as const,
     theme: "Hatha",
-    isFree: false,
     price: 12.99,
   },
   {
@@ -81,8 +76,7 @@ const featuredCourses = [
     duration: 50,
     level: "ADVANCED" as const,
     theme: "Vinyasa",
-    isFree: false,
-    price: null,
+    price: 14.99,
   },
 ];
 
@@ -110,7 +104,7 @@ const faqItems = [
   {
     question: "Y a-t-il une période d'essai ?",
     answer:
-      "Nous proposons plusieurs cours gratuits que vous pouvez visionner sans créer de compte. Pour les contenus premium, créez un compte et découvrez nos offres d'abonnement.",
+      "Nous proposons un large catalogue de cours que vous pouvez découvrir sur la page cours. Pour accéder aux contenus, créez un compte et découvrez nos offres d'abonnement ou achetez à l'unité.",
   },
 ];
 
@@ -153,7 +147,7 @@ export default function HomePage() {
                 <Link href="/inscription">
                   <Button variant="outline" size="lg">
                     <Play className="w-5 h-5" />
-                    Essayer gratuitement
+                    Essayer maintenant
                   </Button>
                 </Link>
               </div>
@@ -428,7 +422,7 @@ export default function HomePage() {
           </h2>
           <p className="text-lg text-white/80 max-w-2xl mx-auto">
             Rejoignez des milliers de pratiquants et commencez aujourd&apos;hui votre
-            transformation. Premier cours gratuit.
+            transformation. Découvrez nos cours dès maintenant.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link href="/inscription">
@@ -436,7 +430,7 @@ export default function HomePage() {
                 size="lg"
                 className="bg-white !text-[color:var(--color-button)] hover:bg-white/90"
               >
-                Créer mon compte gratuit
+                Créer mon compte
                 <ArrowRight className="w-5 h-5" />
               </Button>
             </Link>

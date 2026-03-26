@@ -1,23 +1,54 @@
 "use client";
 
-import { Lock, Play } from "lucide-react";
-import Button from "@/components/ui/Button";
+import { useEffect, useState, useRef } from "react";
+import { Lock, Play, Loader2, AlertCircle } from "lucide-react";
+import Link from "next/link";
 
 interface VideoPlayerProps {
-  videoUrl?: string | null;
+  /** URL de l'API qui retourne la presigned URL (ex: /api/cours/mon-slug/video-url) */
+  apiUrl?: string | null;
   thumbnail?: string | null;
   title: string;
   isLocked: boolean;
-  onUnlockClick?: () => void;
 }
 
 export default function VideoPlayer({
-  videoUrl,
+  apiUrl,
   thumbnail,
   title,
   isLocked,
-  onUnlockClick,
 }: VideoPlayerProps) {
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (isLocked || !apiUrl || fetchedRef.current) return;
+    fetchedRef.current = true;
+
+    setLoading(true);
+    setError(null);
+
+    fetch(apiUrl, { method: "POST", cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Impossible de charger la vidéo");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        setVideoSrc(data.url);
+      })
+      .catch((err) => {
+        setError(err.message);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [apiUrl, isLocked]);
+
   if (isLocked) {
     return (
       <div className="relative aspect-video bg-heading/5 rounded-2xl overflow-hidden">
@@ -36,20 +67,44 @@ export default function VideoPlayer({
           <p className="text-sm text-white/60 text-center max-w-xs">
             Abonnez-vous ou achetez ce cours pour accéder à la vidéo complète
           </p>
-          <Button onClick={onUnlockClick} size="lg">
-            Débloquer ce cours
-          </Button>
+          <Link
+            href="/tarifs"
+            className="inline-flex items-center justify-center gap-2 font-medium rounded-xl transition-all bg-button text-background hover:bg-accent px-6 py-3 text-base"
+          >
+            Voir les abonnements
+          </Link>
         </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="relative aspect-video bg-heading rounded-2xl overflow-hidden flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-white/60 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="relative aspect-video bg-heading rounded-2xl overflow-hidden flex flex-col items-center justify-center gap-3 text-white/60">
+        <AlertCircle className="w-12 h-12" />
+        <p className="font-heading text-lg">Erreur de chargement</p>
+        <p className="text-sm text-white/40">{error}</p>
       </div>
     );
   }
 
   return (
     <div className="relative aspect-video bg-heading rounded-2xl overflow-hidden">
-      {videoUrl ? (
+      {videoSrc ? (
         <video
-          src={videoUrl}
+          src={videoSrc}
           controls
+          controlsList="nodownload"
+          disablePictureInPicture
+          onContextMenu={(e) => e.preventDefault()}
           className="w-full h-full"
           poster={thumbnail || undefined}
         >

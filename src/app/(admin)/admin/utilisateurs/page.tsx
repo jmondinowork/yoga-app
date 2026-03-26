@@ -50,7 +50,7 @@ export default function AdminUtilisateursPage() {
           {[
             { value: "", label: "Tous" },
             { value: "subscribed", label: "Abonnés" },
-            { value: "free", label: "Gratuits" },
+            { value: "free", label: "Inscrits" },
           ].map((f) => (
             <button
               key={f.value}

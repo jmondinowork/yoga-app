@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { stripe } from '@/lib/stripe';
+import { SIMULATE_PAYMENTS, stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 
 export async function POST() {
@@ -14,6 +14,14 @@ export async function POST() {
       );
     }
 
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+    // ─── Mode simulation ───
+    if (SIMULATE_PAYMENTS) {
+      return NextResponse.json({ url: `${baseUrl}/mon-espace/parametres` });
+    }
+
+    // ─── Mode Stripe réel ───
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
     });
@@ -24,8 +32,6 @@ export async function POST() {
         { status: 400 }
       );
     }
-
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: user.stripeCustomerId,

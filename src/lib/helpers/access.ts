@@ -3,52 +3,53 @@ import { prisma } from "@/lib/prisma";
 /**
  * Vérifie si un utilisateur peut accéder à un cours donné.
  * Retourne true si :
- * - Le cours est gratuit
- * - L'utilisateur a un abonnement actif
+ * - L'utilisateur a un abonnement actif ET le cours est inclus dans l'abonnement
  * - L'utilisateur a acheté ce cours
- * - L'utilisateur a acheté une formation contenant ce cours
  */
 export async function canAccessCourse(
   userId: string | undefined,
   courseId: string
 ): Promise<boolean> {
-  // Vérifier d'abord si le cours est gratuit
   const course = await prisma.course.findUnique({
     where: { id: courseId },
-    select: { isFree: true },
+    select: { includedInSubscription: true },
   });
 
   if (!course) return false;
-  if (course.isFree) return true;
   if (!userId) return false;
 
-  // Vérifier l'abonnement actif
-  const subscription = await prisma.subscription.findUnique({
-    where: { userId },
-  });
+  // Vérifier l'abonnement actif (si le cours est inclus dans l'abonnement)
+  if (course.includedInSubscription) {
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId },
+    });
 
-  if (subscription?.status === "ACTIVE") return true;
+    if (subscription?.status === "ACTIVE") return true;
+  }
 
   // Vérifier l'achat direct du cours
   const directPurchase = await prisma.purchase.findFirst({
     where: { userId, courseId },
   });
 
-  if (directPurchase) return true;
+  return !!directPurchase;
+}
 
-  // Vérifier l'achat d'une formation contenant ce cours
-  const formationPurchase = await prisma.purchase.findFirst({
-    where: {
-      userId,
-      formation: {
-        courses: {
-          some: { courseId },
-        },
-      },
-    },
+/**
+ * Vérifie si un utilisateur peut accéder à une formation donnée.
+ * Les formations sont disponibles uniquement à l'achat unique.
+ */
+export async function canAccessFormation(
+  userId: string | undefined,
+  formationId: string
+): Promise<boolean> {
+  if (!userId) return false;
+
+  const purchase = await prisma.purchase.findFirst({
+    where: { userId, formationId },
   });
 
-  return !!formationPurchase;
+  return !!purchase;
 }
 
 /**

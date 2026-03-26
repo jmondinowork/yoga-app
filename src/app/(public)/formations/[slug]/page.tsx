@@ -1,39 +1,88 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Clock, Check, Lock, Play } from "lucide-react";
-import Button from "@/components/ui/Button";
+import { ArrowLeft, BookOpen, Clock, FileText, Video } from "lucide-react";
+import { notFound } from "next/navigation";
 import Badge from "@/components/ui/Badge";
+import PurchaseButton from "@/components/courses/PurchaseButton";
+import FormationVideoList from "@/components/courses/FormationVideoList";
+import FormationPdfButton from "@/components/courses/FormationPdfButton";
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+import { getPresignedUrl } from "@/lib/r2";
 
-export const metadata: Metadata = {
-  title: "Formation",
-};
+interface Props {
+  params: Promise<{ slug: string }>;
+}
 
-// Données de démo
-const formation = {
-  title: "Programme Débutant Complet",
-  description:
-    "Un programme de 4 semaines conçu pour les débutants souhaitant découvrir les bases du yoga. Chaque semaine aborde un thème différent, avec une progression naturelle des postures simples vers des enchaînements plus fluides.\n\nVous apprendrez les fondamentaux de la respiration, les postures debout et au sol, les bases du Vinyasa et comment créer votre propre routine quotidienne.",
-  thumbnail: null,
-  price: 39.99,
-  courseCount: 12,
-  totalDuration: 320,
-  courses: [
-    { title: "Introduction au yoga — Les fondamentaux", duration: 25, completed: false, slug: "intro-yoga-fondamentaux" },
-    { title: "Respiration yogique — Pranayama de base", duration: 20, completed: false, slug: "respiration-pranayama-base" },
-    { title: "Postures debout — Ancrage et stabilité", duration: 30, completed: false, slug: "postures-debout" },
-    { title: "Postures assises — Souplesse du bassin", duration: 25, completed: false, slug: "postures-assises" },
-    { title: "Salutation au Soleil — Version débutant", duration: 20, completed: false, slug: "salutation-soleil-debutant" },
-    { title: "Équilibre — Trouver son centre", duration: 30, completed: false, slug: "equilibre-centre" },
-    { title: "Flow doux — Premier enchaînement", duration: 25, completed: false, slug: "flow-doux-premier" },
-    { title: "Postures d'ouverture — Épaules et poitrine", duration: 30, completed: false, slug: "postures-ouverture" },
-    { title: "Flexions arrière — En douceur", duration: 25, completed: false, slug: "flexions-arriere" },
-    { title: "Inversions douces — Découverte", duration: 20, completed: false, slug: "inversions-douces" },
-    { title: "Séance complète — Tout assembler", duration: 35, completed: false, slug: "seance-complete" },
-    { title: "Relaxation et méditation finale", duration: 35, completed: false, slug: "relaxation-meditation" },
-  ],
-};
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const formation = await prisma.formation.findUnique({
+    where: { slug, isPublished: true },
+    select: { title: true, description: true },
+  });
 
-export default function FormationDetailPage() {
+  if (!formation) return { title: "Formation introuvable" };
+
+  return {
+    title: formation.title,
+    description: formation.description.substring(0, 160),
+  };
+}
+
+export default async function FormationDetailPage({ params }: Props) {
+  const { slug } = await params;
+
+  const formation = await prisma.formation.findUnique({
+    where: { slug, isPublished: true },
+    include: {
+      videos: {
+        orderBy: { sortOrder: "asc" },
+      },
+    },
+  });
+
+  if (!formation) notFound();
+
+  const session = await auth();
+
+  // Vérifier si l'utilisateur a accès (achat unique seulement)
+  let hasAccess = false;
+  if (session?.user?.id) {
+    const purchase = await prisma.purchase.findFirst({
+      where: { userId: session.user.id, formationId: formation.id },
+    });
+    hasAccess = !!purchase;
+  }
+
+  // Progrès des vidéos si l'utilisateur est connecté
+  let videoProgressMap: Record<string, { progress: number; completed: boolean }> = {};
+  if (session?.user?.id && hasAccess) {
+    const progress = await prisma.formationVideoProgress.findMany({
+      where: {
+        userId: session.user.id,
+        formationVideoId: { in: formation.videos.map((v) => v.id) },
+      },
+    });
+    videoProgressMap = Object.fromEntries(
+      progress.map((p) => [p.formationVideoId, { progress: p.progress, completed: p.completed }])
+    );
+  }
+
+  const totalDuration = formation.videos.reduce((acc, v) => acc + v.duration, 0);
+  const completedCount = Object.values(videoProgressMap).filter((p) => p.completed).length;
+
+  // Presigned URL pour la thumbnail
+  let thumbnailUrl: string | null = null;
+  if (formation.thumbnail && !formation.thumbnail.startsWith("http")) {
+    try {
+      thumbnailUrl = await getPresignedUrl(formation.thumbnail, 7200);
+    } catch {
+      thumbnailUrl = null;
+    }
+  } else {
+    thumbnailUrl = formation.thumbnail;
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <Link
@@ -55,14 +104,37 @@ export default function FormationDetailPage() {
             </h1>
             <div className="flex items-center gap-6 text-sm text-muted">
               <span className="flex items-center gap-1.5">
-                <BookOpen className="w-4 h-4" />
-                {formation.courseCount} cours
+                <Video className="w-4 h-4" />
+                {formation.videos.length} vidéo{formation.videos.length > 1 ? "s" : ""}
               </span>
               <span className="flex items-center gap-1.5">
                 <Clock className="w-4 h-4" />
-                {Math.floor(formation.totalDuration / 60)}h{formation.totalDuration % 60 > 0 ? `${formation.totalDuration % 60}min` : ""}
+                {Math.floor(totalDuration / 60) > 0
+                  ? `${Math.floor(totalDuration / 60)}h${totalDuration % 60 > 0 ? `${totalDuration % 60}min` : ""}`
+                  : `${totalDuration}min`}
               </span>
+              {formation.bookletUrl && (
+                <span className="flex items-center gap-1.5">
+                  <FileText className="w-4 h-4" />
+                  Livret PDF inclus
+                </span>
+              )}
             </div>
+            {hasAccess && completedCount > 0 && (
+              <div className="flex items-center gap-2 text-sm">
+                <div className="flex-1 h-2 bg-primary/30 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-button rounded-full transition-all"
+                    style={{
+                      width: `${Math.round((completedCount / formation.videos.length) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-muted">
+                  {completedCount}/{formation.videos.length} complétées
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Description */}
@@ -77,75 +149,88 @@ export default function FormationDetailPage() {
             ))}
           </div>
 
-          {/* Course list */}
-          <div>
-            <h2 className="font-heading text-2xl font-semibold text-heading mb-6">
-              Programme ({formation.courseCount} cours)
-            </h2>
-            <div className="space-y-2">
-              {formation.courses.map((course, index) => (
-                <div
-                  key={course.slug}
-                  className="flex items-center gap-4 p-4 bg-card rounded-xl border border-border hover:border-button/30 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
-                    {course.completed ? (
-                      <Check className="w-4 h-4 text-button" />
-                    ) : (
-                      <span className="text-sm font-medium text-muted">
-                        {index + 1}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-heading truncate">
-                      {course.title}
-                    </p>
-                  </div>
-                  <span className="text-sm text-muted flex items-center gap-1 shrink-0">
-                    <Clock className="w-3.5 h-3.5" />
-                    {course.duration} min
-                  </span>
-                  <Lock className="w-4 h-4 text-muted/50 shrink-0" />
-                </div>
-              ))}
+          {/* Livret PDF */}
+          {formation.bookletUrl && (
+            <div className="bg-gradient-to-r from-accent-light/50 to-primary/30 rounded-2xl p-6 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-button/10 flex items-center justify-center shrink-0">
+                <FileText className="w-6 h-6 text-button" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-heading font-semibold text-heading">
+                  Livret de formation (PDF)
+                </h3>
+                <p className="text-sm text-muted">
+                  Support complémentaire inclus pour accompagner votre progression
+                </p>
+              </div>
+              {hasAccess ? (
+                <FormationPdfButton slug={formation.slug} />
+              ) : (
+                <span className="text-xs text-muted/50 shrink-0">🔒</span>
+              )}
             </div>
-          </div>
+          )}
+
+          {/* Video list */}
+          <FormationVideoList
+            slug={formation.slug}
+            videos={formation.videos.map((v) => ({
+              id: v.id,
+              title: v.title,
+              description: v.description,
+              duration: v.duration,
+              sortOrder: v.sortOrder,
+              videoUrl: v.videoUrl,
+            }))}
+            hasAccess={hasAccess}
+            videoProgressMap={videoProgressMap}
+          />
         </div>
 
         {/* Sidebar */}
         <div>
           <div className="bg-card rounded-2xl border border-border p-6 space-y-6 sticky top-24">
             {/* Thumbnail placeholder */}
-            <div className="aspect-video bg-gradient-to-br from-button/10 to-primary/40 rounded-xl flex items-center justify-center">
-              <BookOpen className="w-12 h-12 text-button/30" />
+            <div className="aspect-video bg-gradient-to-br from-button/10 to-primary/40 rounded-xl flex items-center justify-center overflow-hidden">
+              {thumbnailUrl ? (
+                <img
+                  src={thumbnailUrl}
+                  alt={formation.title}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <BookOpen className="w-12 h-12 text-button/30" />
+              )}
             </div>
 
-            {formation.price ? (
+            {hasAccess ? (
+              <Badge variant="success" className="text-base px-4 py-1 w-full justify-center">
+                ✓ Vous avez accès à cette formation
+              </Badge>
+            ) : formation.price ? (
               <div>
                 <p className="text-sm text-muted">Prix de la formation</p>
                 <p className="font-heading text-4xl font-bold text-heading">
                   {formation.price} <span className="text-lg text-muted">€</span>
                 </p>
               </div>
-            ) : (
-              <Badge variant="premium" className="text-base px-4 py-1">
-                Inclus dans l&apos;abonnement
-              </Badge>
+            ) : null}
+
+            {!hasAccess && formation.price && (
+              <PurchaseButton
+                type="formation"
+                itemId={formation.id}
+                className="w-full"
+                size="lg"
+              >
+                Acheter — {formation.price} €
+              </PurchaseButton>
             )}
 
-            <Button className="w-full" size="lg">
-              {formation.price ? `Acheter — ${formation.price} €` : "S'abonner pour accéder"}
-            </Button>
-
-            <div className="text-center">
-              <Link href="/tarifs" className="text-sm text-button hover:underline">
-                Voir les abonnements
-              </Link>
-            </div>
-
             <div className="border-t border-border pt-4 space-y-2 text-xs text-muted">
-              <p>✓ {formation.courseCount} cours inclus</p>
+              <p>✓ {formation.videos.length} vidéo{formation.videos.length > 1 ? "s" : ""} exclusives</p>
+              {formation.bookletUrl && <p>✓ Livret PDF inclus</p>}
+              <p>✓ Accompagnement personnalisé d&apos;un an avec Mathilde Torrez</p>
               <p>✓ Accès illimité une fois acheté</p>
               <p>✓ Suivi de progression</p>
               <p>✓ Disponible sur tous vos appareils</p>

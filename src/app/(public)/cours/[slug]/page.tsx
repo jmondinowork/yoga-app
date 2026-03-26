@@ -1,59 +1,16 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { Clock, BarChart3, Tag, ArrowLeft, ShoppingCart } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Clock, BarChart3, Tag, ArrowLeft } from "lucide-react";
+import { notFound } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import VideoPlayer from "@/components/courses/VideoPlayer";
 import CourseCard from "@/components/courses/CourseCard";
-import Link from "next/link";
-
-// Données de démo
-const coursesData: Record<string, {
-  title: string;
-  description: string;
-  thumbnail: string | null;
-  videoUrl: string | null;
-  duration: number;
-  level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
-  theme: string;
-  price: number | null;
-  isFree: boolean;
-}> = {
-  "salutation-au-soleil": {
-    title: "Salutation au Soleil — Séance matinale",
-    description: "Commencez votre journée en douceur avec cette séance de Salutation au Soleil. Parfaite pour réveiller le corps et l'esprit, cette pratique matinale vous guidera à travers les postures classiques de la Surya Namaskar.\n\nVous apprendrez à synchroniser votre respiration avec chaque mouvement, à développer votre souplesse et à créer une routine matinale bénéfique. Accessible aux débutants, cette séance de 20 minutes est le point de départ idéal.",
-    thumbnail: null,
-    videoUrl: null,
-    duration: 20,
-    level: "BEGINNER",
-    theme: "Vinyasa",
-    price: null,
-    isFree: true,
-  },
-  "yin-yoga-relaxation": {
-    title: "Yin Yoga — Relaxation profonde",
-    description: "Plongez dans une pratique de Yin Yoga conçue pour une relaxation profonde. Les postures tenues longtemps permettent de travailler les tissus conjonctifs et de relâcher les tensions accumulées.\n\nCette séance est idéale en fin de journée ou après un effort physique. Vous découvrirez les postures fondamentales du Yin et apprendrez à lâcher prise véritablement.",
-    thumbnail: null,
-    videoUrl: null,
-    duration: 45,
-    level: "BEGINNER",
-    theme: "Yin Yoga",
-    price: 9.99,
-    isFree: false,
-  },
-  "vinyasa-flow-intermediaire": {
-    title: "Vinyasa Flow — Énergie & Force",
-    description: "Un flow dynamique pour les pratiquants intermédiaires. Cette séance vous amène plus loin dans votre pratique avec des enchaînements fluides et des postures de force.\n\nTravaillez votre endurance, votre équilibre et votre concentration avec cette séance énergisante de 35 minutes.",
-    thumbnail: null,
-    videoUrl: null,
-    duration: 35,
-    level: "INTERMEDIATE",
-    theme: "Vinyasa",
-    price: null,
-    isFree: false,
-  },
-};
+import PurchaseButton from "@/components/courses/PurchaseButton";
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+import { canAccessCourse } from "@/lib/helpers/access";
+import { getPresignedUrl } from "@/lib/r2";
 
 const levelLabels = {
   BEGINNER: "Débutant",
@@ -61,20 +18,90 @@ const levelLabels = {
   ADVANCED: "Avancé",
 };
 
-const relatedCourses = [
-  { slug: "yin-yoga-relaxation", title: "Yin Yoga — Relaxation profonde", thumbnail: null, duration: 45, level: "BEGINNER" as const, theme: "Yin Yoga", isFree: false, price: 9.99 },
-  { slug: "meditation-guidee-stress", title: "Méditation guidée — Gestion du stress", thumbnail: null, duration: 15, level: "BEGINNER" as const, theme: "Méditation", isFree: true, price: null },
-  { slug: "hatha-yoga-equilibre", title: "Hatha Yoga — Équilibre & Souplesse", thumbnail: null, duration: 40, level: "INTERMEDIATE" as const, theme: "Hatha", isFree: false, price: 12.99 },
-];
+interface Props {
+  params: Promise<{ slug: string }>;
+}
 
-export default function CourseDetailPage({ params }: { params: Promise<{ slug: string }> }) {
-  const router = useRouter();
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const course = await prisma.course.findUnique({
+    where: { slug, isPublished: true },
+    select: { title: true, description: true },
+  });
 
-  // In a real app, this would be fetched from the database
-  // For now, we use demo data with a fallback
-  const slug = "salutation-au-soleil"; // default fallback
-  const course = coursesData[slug] || coursesData["salutation-au-soleil"];
-  const isLocked = !course.isFree; // Simplified demo logic
+  if (!course) return { title: "Cours introuvable" };
+
+  return {
+    title: course.title,
+    description: course.description?.substring(0, 160) ?? "",
+  };
+}
+
+export default async function CourseDetailPage({ params }: Props) {
+  const { slug } = await params;
+
+  const course = await prisma.course.findUnique({
+    where: { slug, isPublished: true },
+  });
+
+  if (!course) notFound();
+
+  const session = await auth();
+
+  // Vérifier l'accès
+  let hasAccess = false;
+  if (session?.user?.id) {
+    hasAccess = await canAccessCourse(session.user.id, course.id);
+  }
+
+  // Progrès vidéo
+  let progress = 0;
+  if (session?.user?.id) {
+    const vp = await prisma.videoProgress.findUnique({
+      where: { userId_courseId: { userId: session.user.id, courseId: course.id } },
+    });
+    if (vp) progress = vp.progress;
+  }
+
+  // Cours similaires (même thème, hors cours actuel)
+  const relatedCourses = await prisma.course.findMany({
+    where: {
+      isPublished: true,
+      theme: course.theme,
+      id: { not: course.id },
+    },
+    take: 3,
+    orderBy: { sortOrder: "asc" },
+  });
+
+  // Presigned URL pour la thumbnail
+  let thumbnailUrl: string | null = null;
+  if (course.thumbnail && !course.thumbnail.startsWith("http")) {
+    try {
+      thumbnailUrl = await getPresignedUrl(course.thumbnail, 7200);
+    } catch {
+      thumbnailUrl = null;
+    }
+  } else {
+    thumbnailUrl = course.thumbnail;
+  }
+
+  // Presigned URLs pour les thumbnails des cours similaires
+  const relatedCoursesWithThumbnails = await Promise.all(
+    relatedCourses.map(async (c) => {
+      if (c.thumbnail && !c.thumbnail.startsWith("http")) {
+        try {
+          const url = await getPresignedUrl(c.thumbnail, 7200);
+          return { ...c, thumbnail: url };
+        } catch {
+          return { ...c, thumbnail: null };
+        }
+      }
+      return c;
+    })
+  );
+
+  const level = course.level as "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -91,19 +118,21 @@ export default function CourseDetailPage({ params }: { params: Promise<{ slug: s
         {/* Main content */}
         <div className="lg:col-span-2 space-y-8">
           <VideoPlayer
-            videoUrl={course.videoUrl}
-            thumbnail={course.thumbnail}
+            apiUrl={`/api/cours/${course.slug}/video-url`}
+            thumbnail={thumbnailUrl}
             title={course.title}
-            isLocked={isLocked}
-            onUnlockClick={() => router.push("/tarifs")}
+            isLocked={!hasAccess}
           />
 
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={course.level === "BEGINNER" ? "success" : course.level === "INTERMEDIATE" ? "warning" : "premium"}>
-                {levelLabels[course.level]}
+              <Badge variant={level === "BEGINNER" ? "success" : level === "INTERMEDIATE" ? "warning" : "premium"}>
+                {levelLabels[level]}
               </Badge>
               <Badge>{course.theme}</Badge>
+              {hasAccess && (
+                <Badge variant="success">✓ Accès débloqué</Badge>
+              )}
             </div>
 
             <h1 className="font-heading text-3xl lg:text-4xl font-bold text-heading">
@@ -117,86 +146,124 @@ export default function CourseDetailPage({ params }: { params: Promise<{ slug: s
               </span>
               <span className="flex items-center gap-1.5">
                 <BarChart3 className="w-4 h-4" />
-                {levelLabels[course.level]}
+                {levelLabels[level]}
               </span>
               <span className="flex items-center gap-1.5">
                 <Tag className="w-4 h-4" />
                 {course.theme}
               </span>
             </div>
+
+            {hasAccess && progress > 0 && (
+              <div className="flex items-center gap-2 text-sm">
+                <div className="flex-1 h-2 bg-primary/30 rounded-full overflow-hidden max-w-xs">
+                  <div
+                    className="h-full bg-button rounded-full transition-all"
+                    style={{ width: `${Math.round(progress)}%` }}
+                  />
+                </div>
+                <span className="text-muted">{Math.round(progress)}%</span>
+              </div>
+            )}
           </div>
 
-          <div className="prose prose-lg max-w-none">
-            <h2 className="font-heading text-2xl font-semibold text-heading">
-              Description
-            </h2>
-            {course.description.split("\n\n").map((paragraph, i) => (
-              <p key={i} className="text-text leading-relaxed">
-                {paragraph}
-              </p>
-            ))}
-          </div>
+          {course.description && (
+            <div className="prose prose-lg max-w-none">
+              <h2 className="font-heading text-2xl font-semibold text-heading">
+                Description
+              </h2>
+              {course.description.split("\n\n").map((paragraph, i) => (
+                <p key={i} className="text-text leading-relaxed">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
           <div className="bg-card rounded-2xl border border-border p-6 space-y-6 sticky top-24">
-            {course.isFree ? (
-              <>
-                <Badge variant="free" className="text-base px-4 py-1">
-                  Gratuit
-                </Badge>
-                <Button className="w-full" size="lg">
-                  Regarder maintenant
-                </Button>
-              </>
-            ) : (
-              <>
-                {course.price && (
-                  <div>
-                    <p className="text-sm text-muted">Prix à l&apos;unité</p>
-                    <p className="font-heading text-4xl font-bold text-heading">
-                      {course.price} <span className="text-lg text-muted">€</span>
-                    </p>
-                  </div>
-                )}
+            {/* Thumbnail */}
+            <div className="aspect-video bg-gradient-to-br from-button/10 to-primary/40 rounded-xl flex items-center justify-center overflow-hidden">
+              {thumbnailUrl ? (
+                <img
+                  src={thumbnailUrl}
+                  alt={course.title}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-5xl opacity-30">🧘</span>
+              )}
+            </div>
 
-                <Button className="w-full" size="lg">
-                  <ShoppingCart className="w-5 h-5" />
-                  {course.price ? `Acheter — ${course.price} €` : "S'abonner pour accéder"}
-                </Button>
+            {hasAccess ? (
+              <Badge variant="success" className="text-base px-4 py-1 w-full justify-center">
+                ✓ Vous avez accès à ce cours
+              </Badge>
+            ) : course.price ? (
+              <div>
+                <p className="text-sm text-muted">Prix à l&apos;unité</p>
+                <p className="font-heading text-4xl font-bold text-heading">
+                  {course.price} <span className="text-lg text-muted">€</span>
+                </p>
+              </div>
+            ) : null}
 
-                <div className="text-center">
-                  <p className="text-sm text-muted">ou</p>
-                  <Link href="/tarifs" className="text-sm text-button hover:underline">
-                    Voir les abonnements
-                  </Link>
-                </div>
-
-                <div className="border-t border-border pt-4">
-                  <p className="text-xs text-muted">
-                    ✓ Accès illimité une fois acheté<br />
-                    ✓ Disponible sur tous vos appareils<br />
-                    ✓ Suivi de progression inclus
-                  </p>
-                </div>
-              </>
+            {!hasAccess && course.price && (
+              <PurchaseButton
+                type="course"
+                itemId={course.id}
+                className="w-full"
+                size="lg"
+              >
+                Acheter — {course.price} €
+              </PurchaseButton>
             )}
+
+            {!hasAccess && (
+              <div className="text-center">
+                <p className="text-sm text-muted">ou</p>
+                <Link href="/tarifs" className="text-sm text-button hover:underline">
+                  Voir les abonnements
+                </Link>
+              </div>
+            )}
+
+            <div className="border-t border-border pt-4">
+              <p className="text-xs text-muted">
+                ✓ Accès illimité une fois acheté<br />
+                ✓ Disponible sur tous vos appareils<br />
+                ✓ Suivi de progression inclus
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Cours similaires */}
-      <section className="mt-20">
-        <h2 className="font-heading text-2xl font-bold text-heading mb-8">
-          Cours similaires
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {relatedCourses.map((c) => (
-            <CourseCard key={c.slug} {...c} />
-          ))}
-        </div>
-      </section>
+      {relatedCourses.length > 0 && (
+        <section className="mt-20">
+          <h2 className="font-heading text-2xl font-bold text-heading mb-8">
+            Cours similaires
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {relatedCoursesWithThumbnails.map((c) => (
+              <CourseCard
+                key={c.slug}
+                slug={c.slug}
+                title={c.title}
+                thumbnail={c.thumbnail}
+                duration={c.duration}
+                level={c.level as "BEGINNER" | "INTERMEDIATE" | "ADVANCED"}
+                theme={c.theme}
+                price={c.price}
+                includedInSubscription={c.includedInSubscription}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

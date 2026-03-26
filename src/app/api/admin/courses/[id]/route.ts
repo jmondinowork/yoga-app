@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { deleteR2Folder } from '@/lib/r2';
 import { z } from 'zod/v4';
 
 const updateCourseSchema = z.object({
@@ -13,7 +14,7 @@ const updateCourseSchema = z.object({
   level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
   theme: z.string().min(2).optional(),
   price: z.number().min(0).optional().nullable(),
-  isFree: z.boolean().optional(),
+  includedInSubscription: z.boolean().optional(),
   isPublished: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
 });
@@ -41,9 +42,6 @@ export async function GET(
   const course = await prisma.course.findUnique({
     where: { id },
     include: {
-      formations: {
-        include: { formation: true },
-      },
       _count: {
         select: { purchases: true, progress: true },
       },
@@ -137,6 +135,13 @@ export async function DELETE(
   }
 
   await prisma.course.delete({ where: { id } });
+
+  // Nettoyage des fichiers R2 associés
+  try {
+    await deleteR2Folder(`cours/${existing.slug}/`);
+  } catch (err) {
+    console.error('[R2_CLEANUP_ERROR]', err);
+  }
 
   return NextResponse.json({ success: true });
 }
