@@ -3,14 +3,13 @@ import Stripe from "stripe";
 // Mode démo : actif quand STRIPE_DEMO=true (simuler les paiements sans appeler Stripe)
 export const SIMULATE_PAYMENTS = process.env.STRIPE_DEMO === "true";
 
-// Sécurité : interdire le mode simulation en production
-if (SIMULATE_PAYMENTS && process.env.NODE_ENV === "production") {
-  throw new Error("STRIPE_DEMO=true est interdit en production. Configurer les clés Stripe réelles.");
-}
-
 let _stripe: Stripe | null = null;
 
 export function getStripe(): Stripe {
+  // Sécurité : interdire le mode simulation en production (vérifié au runtime, pas au build)
+  if (SIMULATE_PAYMENTS && process.env.NODE_ENV === "production") {
+    throw new Error("STRIPE_DEMO=true est interdit en production. Configurer les clés Stripe réelles.");
+  }
   if (SIMULATE_PAYMENTS) {
     throw new Error("Stripe n'est pas configuré. Mode simulation actif.");
   }

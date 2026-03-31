@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, UserPlus } from "lucide-react";
@@ -8,6 +8,14 @@ import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 
 export default function InvitationPage() {
+  return (
+    <Suspense>
+      <InvitationContent />
+    </Suspense>
+  );
+}
+
+function InvitationContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get("token");
