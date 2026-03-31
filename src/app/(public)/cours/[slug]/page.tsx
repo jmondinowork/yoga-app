@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Clock, BarChart3, Tag, ArrowLeft } from "lucide-react";
+import { Clock, Tag, ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -9,14 +9,8 @@ import CourseCard from "@/components/courses/CourseCard";
 import PurchaseButton from "@/components/courses/PurchaseButton";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { canAccessCourse } from "@/lib/helpers/access";
+import { canAccessCourse, getCourseRentalExpiry, hasActiveSubscription } from "@/lib/helpers/access";
 import { getPresignedUrl } from "@/lib/r2";
-
-const levelLabels = {
-  BEGINNER: "Débutant",
-  INTERMEDIATE: "Intermédiaire",
-  ADVANCED: "Avancé",
-};
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -50,8 +44,20 @@ export default async function CourseDetailPage({ params }: Props) {
 
   // Vérifier l'accès
   let hasAccess = false;
+  let rentalExpiry: Date | null = null;
+  let isSubscriber = false;
+  let hoursLeft = 0;
   if (session?.user?.id) {
     hasAccess = await canAccessCourse(session.user.id, course.id);
+    if (hasAccess) {
+      isSubscriber = await hasActiveSubscription(session.user.id);
+      if (!isSubscriber) {
+        rentalExpiry = await getCourseRentalExpiry(session.user.id, course.id);
+        if (rentalExpiry) {
+          hoursLeft = Math.max(0, Math.ceil((rentalExpiry.getTime() - Date.now()) / (1000 * 60 * 60)));
+        }
+      }
+    }
   }
 
   // Progrès vidéo
@@ -101,8 +107,6 @@ export default async function CourseDetailPage({ params }: Props) {
     })
   );
 
-  const level = course.level as "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Back */}
@@ -122,16 +126,17 @@ export default async function CourseDetailPage({ params }: Props) {
             thumbnail={thumbnailUrl}
             title={course.title}
             isLocked={!hasAccess}
+            courseId={hasAccess ? course.id : undefined}
           />
 
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={level === "BEGINNER" ? "success" : level === "INTERMEDIATE" ? "warning" : "premium"}>
-                {levelLabels[level]}
-              </Badge>
               <Badge>{course.theme}</Badge>
-              {hasAccess && (
-                <Badge variant="success">✓ Accès débloqué</Badge>
+              {hasAccess && isSubscriber && (
+                <Badge variant="success">✓ Accès illimité — abonnement</Badge>
+              )}
+              {hasAccess && !isSubscriber && rentalExpiry && (
+                <Badge variant="success">✓ Location active — {hoursLeft}h restantes</Badge>
               )}
             </div>
 
@@ -143,10 +148,6 @@ export default async function CourseDetailPage({ params }: Props) {
               <span className="flex items-center gap-1.5">
                 <Clock className="w-4 h-4" />
                 {course.duration} minutes
-              </span>
-              <span className="flex items-center gap-1.5">
-                <BarChart3 className="w-4 h-4" />
-                {levelLabels[level]}
               </span>
               <span className="flex items-center gap-1.5">
                 <Tag className="w-4 h-4" />
@@ -198,12 +199,26 @@ export default async function CourseDetailPage({ params }: Props) {
             </div>
 
             {hasAccess ? (
-              <Badge variant="success" className="text-base px-4 py-1 w-full justify-center">
-                ✓ Vous avez accès à ce cours
-              </Badge>
+              <div>
+                <Badge variant="success" className="text-base px-4 py-1 w-full justify-center">
+                  ✓ Vous avez accès à ce cours
+                </Badge>
+                {isSubscriber ? (
+                  <p className="text-xs text-muted text-center mt-2">
+                    Accès illimité avec votre abonnement
+                  </p>
+                ) : rentalExpiry ? (
+                  <p className="text-xs text-muted text-center mt-2">
+                    Accès loué 72h — {hoursLeft}h restantes
+                    <br />
+                    (expire le{" "}
+                    {rentalExpiry.toLocaleDateString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })})
+                  </p>
+                ) : null}
+              </div>
             ) : course.price ? (
               <div>
-                <p className="text-sm text-muted">Prix à l&apos;unité</p>
+                <p className="text-sm text-muted">Location 72h</p>
                 <p className="font-heading text-4xl font-bold text-heading">
                   {course.price} <span className="text-lg text-muted">€</span>
                 </p>
@@ -217,7 +232,7 @@ export default async function CourseDetailPage({ params }: Props) {
                 className="w-full"
                 size="lg"
               >
-                Acheter — {course.price} €
+                Louer 72h — {course.price} €
               </PurchaseButton>
             )}
 
@@ -225,14 +240,16 @@ export default async function CourseDetailPage({ params }: Props) {
               <div className="text-center">
                 <p className="text-sm text-muted">ou</p>
                 <Link href="/tarifs" className="text-sm text-button hover:underline">
-                  Voir les abonnements
+                  S&apos;abonner pour un accès illimité
                 </Link>
               </div>
             )}
 
             <div className="border-t border-border pt-4">
               <p className="text-xs text-muted">
-                ✓ Accès illimité une fois acheté<br />
+                {isSubscriber
+                  ? <><span>✓ Accès illimité avec votre abonnement</span><br /></>
+                  : <><span>✓ Accès pendant 72h après location</span><br /></>}
                 ✓ Disponible sur tous vos appareils<br />
                 ✓ Suivi de progression inclus
               </p>
@@ -255,7 +272,6 @@ export default async function CourseDetailPage({ params }: Props) {
                 title={c.title}
                 thumbnail={c.thumbnail}
                 duration={c.duration}
-                level={c.level as "BEGINNER" | "INTERMEDIATE" | "ADVANCED"}
                 theme={c.theme}
                 price={c.price}
                 includedInSubscription={c.includedInSubscription}

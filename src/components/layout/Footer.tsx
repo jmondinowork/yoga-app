@@ -1,7 +1,20 @@
 import Link from "next/link";
-import { Instagram, Youtube, Mail } from "lucide-react";
+import { Instagram, Mail } from "lucide-react";
+import { getContents } from "@/lib/content";
 
-export default function Footer() {
+export default async function Footer() {
+  const c = await getContents([
+    "footer_brand",
+    "footer_tagline",
+    "footer_social_instagram",
+    "footer_social_email",
+  ]);
+
+  const brand = c["footer_brand"] ?? "Prana Motion Yoga";
+  const tagline = c["footer_tagline"] ?? "Découvrez le yoga à votre rythme, avec des cours en ligne accessibles à tous les niveaux.";
+  const instagramUrl = c["footer_social_instagram"] ?? "";
+  const email = c["footer_social_email"] ?? "";
+
   return (
     <footer className="bg-heading text-primary/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -13,60 +26,43 @@ export default function Footer() {
                 <span className="text-white font-heading text-lg font-bold">Y</span>
               </div>
               <span className="font-heading text-2xl font-bold text-white">
-                Prana Motion Yoga
+                {brand}
               </span>
             </Link>
             <p className="text-sm leading-relaxed">
-              Découvrez le yoga à votre rythme, avec des cours en ligne
-              accessibles à tous les niveaux.
+              {tagline}
             </p>
             <div className="flex gap-3">
-              <a
-                href="#"
-                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-button transition-colors"
-                aria-label="Instagram"
-              >
-                <Instagram className="w-4 h-4" />
-              </a>
-              <a
-                href="#"
-                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-button transition-colors"
-                aria-label="YouTube"
-              >
-                <Youtube className="w-4 h-4" />
-              </a>
-              <a
-                href="#"
-                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-button transition-colors"
-                aria-label="Email"
-              >
-                <Mail className="w-4 h-4" />
-              </a>
+              {instagramUrl && (
+                <a
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-button transition-colors"
+                  aria-label="Instagram"
+                >
+                  <Instagram className="w-4 h-4" />
+                </a>
+              )}
+              {email && (
+                <a
+                  href={email.includes("@") ? `mailto:${email}` : email}
+                  className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-button transition-colors"
+                  aria-label="Email"
+                >
+                  <Mail className="w-4 h-4" />
+                </a>
+              )}
             </div>
           </div>
 
-          {/* Cours */}
+          {/* Cours vidéo */}
           <div className="space-y-4">
-            <h3 className="font-heading text-lg font-semibold text-white">Cours</h3>
+            <h3 className="font-heading text-lg font-semibold text-white">Cours vidéo</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/cours?theme=vinyasa" className="text-sm hover:text-white transition-colors">
-                  Vinyasa
-                </Link>
-              </li>
-              <li>
-                <Link href="/cours?theme=hatha" className="text-sm hover:text-white transition-colors">
-                  Hatha
-                </Link>
-              </li>
-              <li>
-                <Link href="/cours?theme=yin" className="text-sm hover:text-white transition-colors">
-                  Yin Yoga
-                </Link>
-              </li>
-              <li>
-                <Link href="/cours?theme=meditation" className="text-sm hover:text-white transition-colors">
-                  Méditation
+                <Link href="/cours" className="text-sm hover:text-white transition-colors">
+                  Cours vidéos
                 </Link>
               </li>
               <li>
@@ -89,16 +85,6 @@ export default function Footer() {
               <li>
                 <Link href="/tarifs" className="text-sm hover:text-white transition-colors">
                   Tarifs
-                </Link>
-              </li>
-              <li>
-                <Link href="/connexion" className="text-sm hover:text-white transition-colors">
-                  Se connecter
-                </Link>
-              </li>
-              <li>
-                <Link href="/inscription" className="text-sm hover:text-white transition-colors">
-                  Créer un compte
                 </Link>
               </li>
             </ul>
@@ -129,7 +115,7 @@ export default function Footer() {
 
         <div className="mt-12 pt-8 border-t border-white/10 text-center">
           <p className="text-sm text-primary/50">
-            © {new Date().getFullYear()} Prana Motion Yoga. Tous droits réservés.
+            © {new Date().getFullYear()} {brand}. Tous droits réservés.
           </p>
         </div>
       </div>

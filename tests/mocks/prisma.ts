@@ -20,6 +20,7 @@ export const prismaMock = {
     updateMany: vi.fn(),
     delete: vi.fn(),
     count: vi.fn(),
+    groupBy: vi.fn(),
   },
   formation: {
     findUnique: vi.fn(),
@@ -29,6 +30,12 @@ export const prismaMock = {
     update: vi.fn(),
     delete: vi.fn(),
     count: vi.fn(),
+  },
+  formationVideo: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    create: vi.fn(),
+    deleteMany: vi.fn(),
   },
   subscription: {
     findUnique: vi.fn(),
@@ -48,6 +55,7 @@ export const prismaMock = {
     create: vi.fn(),
     delete: vi.fn(),
     count: vi.fn(),
+    aggregate: vi.fn(),
   },
   videoProgress: {
     findUnique: vi.fn(),
@@ -59,10 +67,48 @@ export const prismaMock = {
     delete: vi.fn(),
     count: vi.fn(),
   },
-  formationVideo: {
+  formationVideoProgress: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
+    upsert: vi.fn(),
+    delete: vi.fn(),
+  },
+  verificationToken: {
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    delete: vi.fn(),
     deleteMany: vi.fn(),
+  },
+  stripeEvent: {
+    findUnique: vi.fn(),
+    create: vi.fn(),
+  },
+  siteContent: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    upsert: vi.fn(),
+  },
+  liveEvent: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    findMany: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    count: vi.fn(),
+  },
+  eventRegistration: {
+    findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    findMany: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    count: vi.fn(),
   },
   $transaction: vi.fn((fn: (tx: unknown) => unknown) => fn(prismaMock)),
 };

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { User, CreditCard, Bell, Trash2, Save, Lock, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import { User, CreditCard, Bell, Trash2, Save, Lock, Eye, EyeOff, AlertTriangle, CheckCircle } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import Badge from "@/components/ui/Badge";
@@ -18,35 +19,41 @@ interface ParametresClientProps {
   userName: string;
   userEmail: string;
   subscription: SubscriptionData | null;
+  notifNewCourses: boolean;
+}
+
+function Alert({ type, message }: { type: "error" | "success"; message: string }) {
+  return (
+    <div
+      className={`text-sm rounded-xl px-4 py-3 flex items-center gap-2 ${
+        type === "error"
+          ? "bg-red-50 border border-red-200 text-red-700"
+          : "bg-green-50 border border-green-200 text-green-700"
+      }`}
+    >
+      {type === "success" && <CheckCircle className="w-4 h-4 shrink-0" />}
+      {message}
+    </div>
+  );
 }
 
 export default function ParametresClient({
   userName,
   userEmail,
   subscription,
+  notifNewCourses: initialNotifNewCourses,
 }: ParametresClientProps) {
+  const router = useRouter();
+
+  // ─── Profil ───────────────────────────────────────────────────────
   const [name, setName] = useState(userName);
-  const [email, setEmail] = useState(userEmail);
   const [saving, setSaving] = useState(false);
-
-  // Password state
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [savingPassword, setSavingPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState("");
-  const [passwordSuccess, setPasswordSuccess] = useState("");
-
-  // Subscription state
-  const [canceling, setCanceling] = useState(false);
-  const [cancelError, setCancelError] = useState("");
-  const [cancelSuccess, setCancelSuccess] = useState("");
+  const [profileMsg, setProfileMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setProfileMsg(null);
     try {
       const res = await fetch("/api/auth/profile", {
         method: "PUT",
@@ -55,29 +62,38 @@ export default function ParametresClient({
       });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "Erreur lors de la sauvegarde");
+        setProfileMsg({ type: "error", text: data.error || "Erreur lors de la sauvegarde" });
+      } else {
+        setProfileMsg({ type: "success", text: "Profil mis à jour avec succès" });
+        router.refresh();
       }
     } catch {
-      alert("Une erreur est survenue");
+      setProfileMsg({ type: "error", text: "Une erreur est survenue" });
     } finally {
       setSaving(false);
     }
   };
 
+  // ─── Mot de passe ─────────────────────────────────────────────────
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    setPasswordError("");
-    setPasswordSuccess("");
-
+    setPasswordMsg(null);
     if (newPassword.length < 6) {
-      setPasswordError("Le nouveau mot de passe doit contenir au moins 6 caractères");
+      setPasswordMsg({ type: "error", text: "Le nouveau mot de passe doit contenir au moins 6 caractères" });
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError("Les mots de passe ne correspondent pas");
+      setPasswordMsg({ type: "error", text: "Les mots de passe ne correspondent pas" });
       return;
     }
-
     setSavingPassword(true);
     try {
       const res = await fetch("/api/auth/password", {
@@ -85,52 +101,100 @@ export default function ParametresClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword, newPassword }),
       });
-
       if (!res.ok) {
         const data = await res.json();
-        setPasswordError(data.error || "Erreur lors du changement de mot de passe");
-        return;
+        setPasswordMsg({ type: "error", text: data.error || "Erreur lors du changement de mot de passe" });
+      } else {
+        setPasswordMsg({ type: "success", text: "Mot de passe modifié avec succès" });
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
       }
-
-      setPasswordSuccess("Mot de passe modifié avec succès");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
     } catch {
-      setPasswordError("Une erreur est survenue");
+      setPasswordMsg({ type: "error", text: "Une erreur est survenue" });
     } finally {
       setSavingPassword(false);
     }
   };
 
+  // ─── Abonnement ───────────────────────────────────────────────────
+  const [canceling, setCanceling] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
   const handleCancelSubscription = async () => {
     setCanceling(true);
-    setCancelError("");
-    setCancelSuccess("");
-
+    setCancelMsg(null);
     try {
-      const res = await fetch("/api/stripe/cancel", {
-        method: "POST",
-      });
-
+      const res = await fetch("/api/stripe/cancel", { method: "POST" });
       if (!res.ok) {
         const data = await res.json();
-        setCancelError(data.error || "Erreur lors de la résiliation");
-        return;
+        setCancelMsg({ type: "error", text: data.error || "Erreur lors de la résiliation" });
+      } else {
+        setCancelMsg({ type: "success", text: "Votre abonnement sera résilié à la fin de la période en cours." });
+        setTimeout(() => window.location.reload(), 1500);
       }
-
-      setCancelSuccess("Votre abonnement sera résilié à la fin de la période en cours.");
-      // Reload to reflect updated subscription status
-      setTimeout(() => window.location.reload(), 1500);
     } catch {
-      setCancelError("Une erreur est survenue");
+      setCancelMsg({ type: "error", text: "Une erreur est survenue" });
     } finally {
       setCanceling(false);
     }
   };
 
+  // ─── Notifications ────────────────────────────────────────────────
+  const [notifNewCourses, setNotifNewCourses] = useState(initialNotifNewCourses);
+  const [savingNotif, setSavingNotif] = useState(false);
+  const [notifMsg, setNotifMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
+  const handleSaveNotifications = async () => {
+    setSavingNotif(true);
+    setNotifMsg(null);
+    try {
+      const res = await fetch("/api/auth/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notifNewCourses }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setNotifMsg({ type: "error", text: data.error || "Erreur lors de la sauvegarde" });
+      } else {
+        setNotifMsg({ type: "success", text: "Préférences de notifications enregistrées" });
+      }
+    } catch {
+      setNotifMsg({ type: "error", text: "Une erreur est survenue" });
+    } finally {
+      setSavingNotif(false);
+    }
+  };
+
+  // ─── Suppression de compte ────────────────────────────────────────
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteMsg, setDeleteMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    setDeleteMsg(null);
+    try {
+      const res = await fetch("/api/auth/account", { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        setDeleteMsg({ type: "error", text: data.error || "Erreur lors de la suppression" });
+      } else {
+        // Déconnexion et redirection
+        window.location.href = "/connexion?deleted=1";
+      }
+    } catch {
+      setDeleteMsg({ type: "error", text: "Une erreur est survenue" });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // ─── Labels abonnement ────────────────────────────────────────────
   const planLabel = subscription?.plan === "ANNUAL" ? "annuel" : "mensuel";
-  const planPrice = subscription?.plan === "ANNUAL" ? "14,99 €/mois (facturé annuellement)" : "19,99 €/mois";
+  const planPrice = subscription?.plan === "ANNUAL" ? "200 €/an (facturé annuellement)" : "22 €/mois";
   const periodEnd = subscription
     ? new Date(subscription.currentPeriodEnd).toLocaleDateString("fr-FR", {
         day: "numeric",
@@ -142,33 +206,36 @@ export default function ParametresClient({
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-heading text-3xl font-bold text-heading mb-2">
-          Paramètres
-        </h1>
+        <h1 className="font-heading text-3xl font-bold text-heading mb-2">Paramètres</h1>
         <p className="text-muted">Gérez votre profil et vos préférences</p>
       </div>
 
-      {/* Profile */}
+      {/* ─── Profil ──────────────────────────────────────────────── */}
       <div className="bg-card rounded-2xl border border-border p-6 space-y-6">
         <div className="flex items-center gap-3 pb-4 border-b border-border">
           <User className="w-5 h-5 text-button" />
           <h2 className="font-heading text-lg font-semibold text-heading">Profil</h2>
         </div>
-
         <form onSubmit={handleSave} className="space-y-4 max-w-md">
+          {profileMsg && <Alert type={profileMsg.type} message={profileMsg.text} />}
           <Input
             id="name"
             label="Nom"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            required
           />
           <Input
             id="email"
             label="Email"
             type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={userEmail}
+            readOnly
+            disabled
           />
+          <p className="text-xs text-muted -mt-2">
+            L&apos;email ne peut pas être modifié directement. Contactez-nous si nécessaire.
+          </p>
           <Button type="submit" loading={saving}>
             <Save className="w-4 h-4" />
             Enregistrer
@@ -176,24 +243,14 @@ export default function ParametresClient({
         </form>
       </div>
 
-      {/* Password */}
+      {/* ─── Mot de passe ────────────────────────────────────────── */}
       <div className="bg-card rounded-2xl border border-border p-6 space-y-6">
         <div className="flex items-center gap-3 pb-4 border-b border-border">
           <Lock className="w-5 h-5 text-button" />
           <h2 className="font-heading text-lg font-semibold text-heading">Mot de passe</h2>
         </div>
-
         <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
-          {passwordError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
-              {passwordError}
-            </div>
-          )}
-          {passwordSuccess && (
-            <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl px-4 py-3">
-              {passwordSuccess}
-            </div>
-          )}
+          {passwordMsg && <Alert type={passwordMsg.type} message={passwordMsg.text} />}
           <div className="relative">
             <Input
               id="currentPassword"
@@ -244,36 +301,22 @@ export default function ParametresClient({
         </form>
       </div>
 
-      {/* Subscription */}
+      {/* ─── Abonnement ──────────────────────────────────────────── */}
       <div className="bg-card rounded-2xl border border-border p-6 space-y-6">
         <div className="flex items-center gap-3 pb-4 border-b border-border">
           <CreditCard className="w-5 h-5 text-button" />
           <h2 className="font-heading text-lg font-semibold text-heading">Abonnement</h2>
         </div>
-
-        {cancelError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
-            {cancelError}
-          </div>
-        )}
-        {cancelSuccess && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl px-4 py-3">
-            {cancelSuccess}
-          </div>
-        )}
+        {cancelMsg && <Alert type={cancelMsg.type} message={cancelMsg.text} />}
 
         {!subscription || subscription.status === "CANCELED" || subscription.status === "EXPIRED" ? (
           <div className="space-y-4">
-            <p className="text-text">
-              Vous n&apos;avez pas d&apos;abonnement actif.
-            </p>
+            <p className="text-text">Vous n&apos;avez pas d&apos;abonnement actif.</p>
             <p className="text-sm text-muted">
               Abonnez-vous pour accéder à l&apos;ensemble des cours vidéo en illimité.
             </p>
             <Link href="/tarifs">
-              <Button>
-                Voir les offres d&apos;abonnement
-              </Button>
+              <Button>Voir les offres d&apos;abonnement</Button>
             </Link>
           </div>
         ) : (
@@ -281,9 +324,7 @@ export default function ParametresClient({
             <div className="flex items-center justify-between p-4 bg-accent-light/20 rounded-xl">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium text-heading">
-                    Plan {planLabel}
-                  </span>
+                  <span className="font-medium text-heading">Plan {planLabel}</span>
                   {subscription.cancelAtPeriodEnd ? (
                     <Badge variant="warning">Résiliation programmée</Badge>
                   ) : (
@@ -298,7 +339,6 @@ export default function ParametresClient({
                 </p>
               </div>
             </div>
-
             {subscription.cancelAtPeriodEnd ? (
               <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
@@ -331,35 +371,32 @@ export default function ParametresClient({
         )}
       </div>
 
-      {/* Notifications */}
+      {/* ─── Notifications ───────────────────────────────────────── */}
       <div className="bg-card rounded-2xl border border-border p-6 space-y-6">
         <div className="flex items-center gap-3 pb-4 border-b border-border">
           <Bell className="w-5 h-5 text-button" />
-          <h2 className="font-heading text-lg font-semibold text-heading">Notifications</h2>
+          <h2 className="font-heading text-lg font-semibold text-heading">Notifications par email</h2>
         </div>
-
-        <div className="space-y-3">
-          {[
-            { label: "Nouveaux cours disponibles", checked: true },
-            { label: "Rappels de pratique quotidienne", checked: false },
-            { label: "Promotions et offres spéciales", checked: true },
-          ].map((notif) => (
-            <label
-              key={notif.label}
-              className="flex items-center justify-between p-3 rounded-xl hover:bg-primary/10 transition-colors cursor-pointer"
-            >
-              <span className="text-sm text-text">{notif.label}</span>
-              <input
-                type="checkbox"
-                defaultChecked={notif.checked}
-                className="w-4 h-4 rounded accent-button"
-              />
-            </label>
-          ))}
-        </div>
+        {notifMsg && <Alert type={notifMsg.type} message={notifMsg.text} />}
+        <label className="flex items-start justify-between gap-4 p-3 rounded-xl hover:bg-primary/10 transition-colors cursor-pointer">
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium text-text">Nouveaux cours et formations disponibles</p>
+            <p className="text-xs text-muted">Soyez averti(e) dès qu&apos;un nouveau cours ou une nouvelle formation est publié(e).</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={notifNewCourses}
+            onChange={(e) => setNotifNewCourses(e.target.checked)}
+            className="w-4 h-4 mt-0.5 rounded accent-button shrink-0 cursor-pointer"
+          />
+        </label>
+        <Button onClick={handleSaveNotifications} loading={savingNotif}>
+          <Save className="w-4 h-4" />
+          Enregistrer les préférences
+        </Button>
       </div>
 
-      {/* Danger zone */}
+      {/* ─── Zone de danger ──────────────────────────────────────── */}
       <div className="bg-card rounded-2xl border border-red-200 p-6 space-y-4">
         <div className="flex items-center gap-3 pb-4 border-b border-red-200">
           <Trash2 className="w-5 h-5 text-red-500" />
@@ -367,15 +404,56 @@ export default function ParametresClient({
         </div>
         <p className="text-sm text-text">
           La suppression de votre compte est irréversible. Toutes vos données,
-          achats et progression seront définitivement perdus.
+          achats, locations et progression seront définitivement perdus.
         </p>
-        <Button
-          variant="ghost"
-          className="text-red-500 hover:bg-red-50 border border-red-200"
-        >
-          <Trash2 className="w-4 h-4" />
-          Supprimer mon compte
-        </Button>
+
+        {!showDeleteConfirm ? (
+          <Button
+            variant="ghost"
+            className="text-red-500 hover:bg-red-50 border border-red-200"
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            <Trash2 className="w-4 h-4" />
+            Supprimer mon compte
+          </Button>
+        ) : (
+          <div className="space-y-4 border border-red-200 rounded-xl p-4 bg-red-50">
+            <p className="text-sm font-medium text-red-700">
+              Pour confirmer, tapez <strong>SUPPRIMER</strong> ci-dessous :
+            </p>
+            {deleteMsg && <Alert type={deleteMsg.type} message={deleteMsg.text} />}
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="SUPPRIMER"
+              className="w-full max-w-xs px-4 py-2 rounded-xl border border-red-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+            />
+            <div className="flex gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-red-600 bg-white hover:bg-red-100 border border-red-300"
+                onClick={handleDeleteAccount}
+                loading={deleting}
+                disabled={deleteConfirmText !== "SUPPRIMER"}
+              >
+                Confirmer la suppression
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteConfirmText("");
+                  setDeleteMsg(null);
+                }}
+              >
+                Annuler
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

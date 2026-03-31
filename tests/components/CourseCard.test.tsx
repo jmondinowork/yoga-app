@@ -14,7 +14,6 @@ const baseProps = {
   title: 'Yoga doux pour le matin',
   thumbnail: null,
   duration: 30,
-  level: 'BEGINNER' as const,
   theme: 'Hatha',
 };
 
@@ -30,35 +29,10 @@ describe('CourseCard', () => {
     expect(screen.getByText('30 min')).toBeInTheDocument();
   });
 
-  it('affiche le niveau en français', () => {
-    render(<CourseCard {...baseProps} />);
-    expect(screen.getByText('Débutant')).toBeInTheDocument();
-  });
-
-  it('affiche "Intermédiaire" pour le niveau INTERMEDIATE', () => {
-    render(<CourseCard {...baseProps} level="INTERMEDIATE" />);
-    expect(screen.getByText('Intermédiaire')).toBeInTheDocument();
-  });
-
-  it('affiche "Avancé" pour le niveau ADVANCED', () => {
-    render(<CourseCard {...baseProps} level="ADVANCED" />);
-    expect(screen.getByText('Avancé')).toBeInTheDocument();
-  });
-
   it('lien pointe vers /cours/{slug}', () => {
     render(<CourseCard {...baseProps} />);
     const link = screen.getByRole('link');
     expect(link).toHaveAttribute('href', '/cours/yoga-doux');
-  });
-
-  it('affiche le prix quand défini', () => {
-    render(<CourseCard {...baseProps} price={19.99} />);
-    expect(screen.getByText('19.99 €')).toBeInTheDocument();
-  });
-
-  it('affiche "Abonnement" quand inclus dans l\'abonnement sans prix', () => {
-    render(<CourseCard {...baseProps} includedInSubscription={true} />);
-    expect(screen.getByText('Abonnement')).toBeInTheDocument();
   });
 
   it('affiche la barre de progression si progress > 0', () => {

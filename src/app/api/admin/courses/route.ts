@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod/v4';
+import { generateThumbnailFromVideo } from '@/lib/thumbnail';
 
 // Schéma de validation
 const courseSchema = z.object({
@@ -11,7 +12,6 @@ const courseSchema = z.object({
   thumbnail: z.string().optional(),
   videoUrl: z.string().optional(),
   duration: z.number().int().positive('La durée doit être positive'),
-  level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']),
   theme: z.string().min(2),
   price: z.number().min(0).optional(),
   includedInSubscription: z.boolean().default(true),
@@ -99,6 +99,16 @@ export async function POST(req: NextRequest) {
     }
 
     const course = await prisma.course.create({ data });
+
+    // Auto-generate thumbnail from video first frame if no thumbnail provided
+    if (!data.thumbnail && data.videoUrl) {
+      const thumbKey = `cours/${data.slug}/thumbnail.jpg`;
+      generateThumbnailFromVideo(data.videoUrl, thumbKey).then(async (key) => {
+        if (key) {
+          await prisma.course.update({ where: { id: course.id }, data: { thumbnail: key } });
+        }
+      }).catch((err) => console.error('[AUTO_THUMBNAIL_ERROR]', err));
+    }
 
     return NextResponse.json(course, { status: 201 });
   } catch (error) {

@@ -31,7 +31,6 @@ describe('FilterBar', () => {
     fireEvent.click(screen.getByText('Filtres'));
 
     expect(screen.getByText('Thème')).toBeInTheDocument();
-    expect(screen.getByText('Niveau')).toBeInTheDocument();
     expect(screen.getByText('Durée')).toBeInTheDocument();
   });
 
@@ -42,16 +41,6 @@ describe('FilterBar', () => {
     themes.forEach((t) => {
       expect(screen.getByText(t)).toBeInTheDocument();
     });
-  });
-
-  it('affiche les niveaux dans le select', () => {
-    render(<FilterBar themes={themes} onFilterChange={onFilterChange} />);
-    fireEvent.click(screen.getByText('Filtres'));
-
-    expect(screen.getByText('Tous les niveaux')).toBeInTheDocument();
-    expect(screen.getByText('Débutant')).toBeInTheDocument();
-    expect(screen.getByText('Intermédiaire')).toBeInTheDocument();
-    expect(screen.getByText('Avancé')).toBeInTheDocument();
   });
 
   it('appelle onFilterChange quand on sélectionne un thème', () => {
@@ -90,7 +79,6 @@ describe('FilterBar', () => {
     expect(onFilterChange).toHaveBeenLastCalledWith({
       search: '',
       theme: '',
-      level: '',
       duration: '',
     });
   });

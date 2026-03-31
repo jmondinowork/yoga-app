@@ -9,16 +9,20 @@ import {
   Users,
   CreditCard,
   FileText,
+  Settings,
   ArrowLeft,
+  CalendarDays,
 } from "lucide-react";
 
 const adminLinks = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/cours", label: "Cours", icon: Video },
   { href: "/admin/formations", label: "Formations", icon: BookOpen },
+  { href: "/admin/cours-en-ligne", label: "Cours en ligne", icon: CalendarDays },
   { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users },
-  { href: "/admin/abonnements", label: "Abonnements", icon: CreditCard },
+  { href: "/admin/abonnements", label: "Revenus", icon: CreditCard },
   { href: "/admin/contenu", label: "Contenu", icon: FileText },
+  { href: "/admin/parametres", label: "Paramètres", icon: Settings },
 ];
 
 export default function AdminSidebar() {

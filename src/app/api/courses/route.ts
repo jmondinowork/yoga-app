@@ -8,7 +8,6 @@ export async function GET(req: NextRequest) {
   const page = parseInt(searchParams.get('page') || '1');
   const limit = parseInt(searchParams.get('limit') || '20');
   const theme = searchParams.get('theme');
-  const level = searchParams.get('level');
   const search = searchParams.get('search');
 
   const where: Record<string, unknown> = {
@@ -17,10 +16,6 @@ export async function GET(req: NextRequest) {
 
   if (theme) {
     where.theme = theme;
-  }
-
-  if (level && ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'].includes(level)) {
-    where.level = level;
   }
 
   if (search) {
@@ -44,7 +39,6 @@ export async function GET(req: NextRequest) {
         description: true,
         thumbnail: true,
         duration: true,
-        level: true,
         theme: true,
         price: true,
         includedInSubscription: true,

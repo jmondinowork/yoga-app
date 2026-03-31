@@ -1,12 +1,20 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { getPresignedUrl } from "@/lib/r2";
+import { getContents } from "@/lib/content";
 import FormationsPageClient from "./FormationsPageClient";
 
-export const metadata: Metadata = {
-  title: "Formations",
-  description: "Découvrez nos formations complètes de yoga, des programmes structurés pour progresser étape par étape.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const c = await getContents(["seo_formations_title", "seo_formations_description", "seo_formations_keywords", "seo_formations_og_title", "seo_formations_og_description"]);
+  const title = c["seo_formations_title"] ?? "Formations";
+  const description = c["seo_formations_description"] ?? "Découvrez nos formations complètes de yoga, des programmes structurés pour progresser étape par étape.";
+  return {
+    title,
+    description,
+    ...(c["seo_formations_keywords"] ? { keywords: c["seo_formations_keywords"].split(",").map((k: string) => k.trim()) } : {}),
+    openGraph: { title: c["seo_formations_og_title"] || title, description: c["seo_formations_og_description"] || description },
+  };
+}
 
 export default async function FormationsPage() {
   const formations = await prisma.formation.findMany({

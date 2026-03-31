@@ -19,6 +19,7 @@ interface NavbarProps {
 const publicLinks = [
   { href: "/cours", label: "Cours" },
   { href: "/formations", label: "Formations" },
+  { href: "/cours-en-ligne", label: "Cours en ligne" },
   { href: "/tarifs", label: "Tarifs" },
   { href: "/a-propos", label: "À propos" },
 ];
@@ -64,19 +65,21 @@ export default function Navbar({ user }: NavbarProps) {
           <div className="hidden lg:flex items-center gap-3">
             {user ? (
               <div className="flex items-center gap-3">
-                {user.role === "ADMIN" && (
+                {user.role === "ADMIN" ? (
                   <Link href="/admin">
-                    <Button variant="ghost" size="sm">
-                      Admin
+                    <Button variant="secondary" size="sm">
+                      <User className="w-4 h-4" />
+                      Administration
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href="/mon-espace">
+                    <Button variant="secondary" size="sm">
+                      <User className="w-4 h-4" />
+                      Mon espace
                     </Button>
                   </Link>
                 )}
-                <Link href="/mon-espace">
-                  <Button variant="secondary" size="sm">
-                    <User className="w-4 h-4" />
-                    Mon espace
-                  </Button>
-                </Link>
                 <button
                     type="button"
                     onClick={() => signOut({ callbackUrl: "/" })}
@@ -130,19 +133,21 @@ export default function Navbar({ user }: NavbarProps) {
             <div className="pt-4 border-t border-border space-y-2">
               {user ? (
                 <>
-                  {user.role === "ADMIN" && (
+                  {user.role === "ADMIN" ? (
                     <Link href="/admin" onClick={() => setIsOpen(false)}>
-                      <Button variant="ghost" size="sm" className="w-full">
+                      <Button variant="secondary" size="sm" className="w-full">
+                        <User className="w-4 h-4" />
                         Administration
                       </Button>
                     </Link>
+                  ) : (
+                    <Link href="/mon-espace" onClick={() => setIsOpen(false)}>
+                      <Button variant="secondary" size="sm" className="w-full">
+                        <User className="w-4 h-4" />
+                        Mon espace
+                      </Button>
+                    </Link>
                   )}
-                  <Link href="/mon-espace" onClick={() => setIsOpen(false)}>
-                    <Button variant="secondary" size="sm" className="w-full">
-                      <User className="w-4 h-4" />
-                      Mon espace
-                    </Button>
-                  </Link>
                 </>
               ) : (
                 <>

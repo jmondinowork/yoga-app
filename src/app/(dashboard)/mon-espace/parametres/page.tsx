@@ -14,7 +14,11 @@ export default async function ParametresPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { name: true, email: true },
+    select: {
+      name: true,
+      email: true,
+      notifNewCourses: true,
+    },
   });
 
   const subscription = await prisma.subscription.findUnique({
@@ -35,6 +39,7 @@ export default async function ParametresPage() {
       userName={user?.name || ""}
       userEmail={user?.email || ""}
       subscription={subscriptionData}
+      notifNewCourses={user?.notifNewCourses ?? true}
     />
   );
 }

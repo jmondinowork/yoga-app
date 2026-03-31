@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { deleteR2Folder } from '@/lib/r2';
 import { z } from 'zod/v4';
+import { sendNewCourseNotification } from '@/lib/email';
+import { generateThumbnailFromVideo } from '@/lib/thumbnail';
 
 const updateCourseSchema = z.object({
   title: z.string().min(3).optional(),
@@ -11,7 +13,6 @@ const updateCourseSchema = z.object({
   thumbnail: z.string().optional(),
   videoUrl: z.string().optional(),
   duration: z.number().int().positive().optional(),
-  level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
   theme: z.string().min(2).optional(),
   price: z.number().min(0).optional().nullable(),
   includedInSubscription: z.boolean().optional(),
@@ -97,6 +98,35 @@ export async function PATCH(
       where: { id },
       data,
     });
+
+    // Auto-generate thumbnail from video first frame if no thumbnail
+    const finalThumbnail = data.thumbnail ?? existing.thumbnail;
+    const finalVideoUrl = data.videoUrl ?? existing.videoUrl;
+    if (!finalThumbnail && finalVideoUrl) {
+      const slug = data.slug ?? existing.slug;
+      const thumbKey = `cours/${slug}/thumbnail.jpg`;
+      generateThumbnailFromVideo(finalVideoUrl, thumbKey).then(async (key) => {
+        if (key) {
+          await prisma.course.update({ where: { id }, data: { thumbnail: key } });
+        }
+      }).catch((err) => console.error('[AUTO_THUMBNAIL_ERROR]', err));
+    }
+
+    // Envoyer email de notification si le cours vient d'être publié
+    if (data.isPublished === true && !existing.isPublished) {
+      const recipients = await prisma.user.findMany({
+        where: { notifNewCourses: true },
+        select: { email: true, name: true },
+      });
+      sendNewCourseNotification({
+        courseTitle: course.title,
+        courseSlug: course.slug,
+        courseDuration: course.duration,
+        courseTheme: course.theme,
+        courseThumbnail: course.thumbnail,
+        recipients,
+      }).catch((err) => console.error('[EMAIL_NOTIF_ERROR]', err));
+    }
 
     return NextResponse.json(course);
   } catch (error) {

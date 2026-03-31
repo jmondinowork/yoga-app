@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { deleteR2Folder } from '@/lib/r2';
 import { z } from 'zod/v4';
+import { sendNewFormationNotification } from '@/lib/email';
+import { generateThumbnailFromVideo } from '@/lib/thumbnail';
 
 const videoSchema = z.object({
   id: z.string().optional(),
@@ -132,7 +134,7 @@ export async function PATCH(
               data: videoData,
             });
           } else {
-            const { id: _videoId, ...videoData } = video;
+            const { id: _videoId, ...videoData } = video; // eslint-disable-line @typescript-eslint/no-unused-vars
             await tx.formationVideo.create({
               data: { formationId: id, ...videoData },
             });
@@ -149,6 +151,44 @@ export async function PATCH(
         },
       });
     });
+
+    // Auto-generate thumbnail from first video if no thumbnail
+    const finalThumbnail = data.thumbnail ?? existing.thumbnail;
+    if (!finalThumbnail && formation) {
+      const formationVideos = formation.videos;
+      const firstVideo = formationVideos?.[0];
+      if (firstVideo?.videoUrl) {
+        const slug = data.slug ?? existing.slug;
+        const videoKey = firstVideo.videoUrl.includes("/")
+          ? firstVideo.videoUrl
+          : `formations/${slug}/videos/${firstVideo.videoUrl}`;
+        const thumbKey = `formations/${slug}/thumbnail.jpg`;
+        generateThumbnailFromVideo(videoKey, thumbKey).then(async (key) => {
+          if (key) {
+            await prisma.formation.update({ where: { id }, data: { thumbnail: key } });
+          }
+        }).catch((err) => console.error('[AUTO_THUMBNAIL_ERROR]', err));
+      }
+    }
+
+    // Envoyer email de notification si la formation vient d'être publiée
+    if (data.isPublished === true && !existing.isPublished) {
+      const recipients = await prisma.user.findMany({
+        where: { notifNewCourses: true },
+        select: { email: true, name: true },
+      });
+      const slug = (formation as NonNullable<typeof formation>)?.slug ?? existing.slug;
+      const title = (formation as NonNullable<typeof formation>)?.title ?? existing.title;
+      const thumbnail = (formation as NonNullable<typeof formation>)?.thumbnail ?? existing.thumbnail;
+      const price = (formation as NonNullable<typeof formation>)?.price ?? existing.price;
+      sendNewFormationNotification({
+        formationTitle: title,
+        formationSlug: slug,
+        formationThumbnail: thumbnail,
+        formationPrice: price,
+        recipients,
+      }).catch((err) => console.error('[EMAIL_NOTIF_ERROR]', err));
+    }
 
     return NextResponse.json(formation);
   } catch (error) {

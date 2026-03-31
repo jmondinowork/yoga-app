@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit:*)",
+      "Bash(ls /Users/jmondino/DVP/Perso/yoga-app/src/app/api/admin/formations/[id]/)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

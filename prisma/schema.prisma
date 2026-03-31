@@ -56,6 +56,15 @@ model User {
   password         String?
   role             Role      @default(USER)
   stripeCustomerId String?   @unique
+
+  // Invitation
+  invitationToken   String?   @unique
+  invitationExpires DateTime?
+
+  // Préférences de notifications email
+  notifNewCourses  Boolean   @default(true)
+  notifEventReminders Boolean @default(true)
+
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -65,6 +74,7 @@ model User {
   purchases              Purchase[]
   progress               VideoProgress[]
   formationVideoProgress FormationVideoProgress[]
+  eventRegistrations     EventRegistration[]
 }
 
 enum Role {
@@ -80,7 +90,6 @@ model Course {
   thumbnail   String?
   videoUrl    String?
   duration    Int
-  level       Level
   theme       String
   price                  Float?
   includedInSubscription Boolean @default(true)
@@ -92,12 +101,6 @@ model Course {
 
   purchases  Purchase[]
   progress   VideoProgress[]
-}
-
-enum Level {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
 }
 
 model Formation {
@@ -179,12 +182,13 @@ enum SubscriptionStatus {
 }
 
 model Purchase {
-  id              String  @id @default(cuid())
+  id              String    @id @default(cuid())
   userId          String
   courseId         String?
   formationId     String?
   amount          Float
   stripePaymentId String
+  expiresAt       DateTime? // Location 72h pour les cours (null = accès permanent, ex: formations)
 
   createdAt DateTime @default(now())
 
@@ -207,6 +211,50 @@ model VideoProgress {
   course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([userId, courseId])
+}
+
+// ─── Live Calendar Events ─────────────────────────────────────────
+
+enum EventRecurrence {
+  NONE
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+model LiveEvent {
+  id              String          @id @default(cuid())
+  title           String
+  slug            String          @unique
+  description     String          @db.Text
+  meetingLink     String
+  startTime       DateTime
+  duration        Int             // durée en minutes
+  recurrence      EventRecurrence @default(NONE)
+  recurrenceEnd   DateTime?
+  maxParticipants Int             @default(20)
+  isPublished     Boolean         @default(false)
+  theme           String          @default("Général")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  registrations EventRegistration[]
+}
+
+model EventRegistration {
+  id             String    @id @default(cuid())
+  userId         String
+  eventId        String
+  occurrenceDate DateTime
+  cancelledAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event LiveEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId, occurrenceDate])
 }
 
 // ─── CMS Content ───────────────────────────────────────────────────
@@ -240,4 +288,11 @@ model FAQ {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─── Stripe webhook idempotency ────────────────────────────────────
+
+model StripeEvent {
+  id        String   @id // Stripe event ID (evt_...)
+  createdAt DateTime @default(now())
 }

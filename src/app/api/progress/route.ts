@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { canAccessCourse } from '@/lib/helpers/access';
 
 // POST - Mettre à jour la progression vidéo
 export async function POST(req: NextRequest) {
@@ -20,6 +21,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Données manquantes.' },
         { status: 400 }
+      );
+    }
+
+    // Vérifier que l'utilisateur a accès au cours
+    const hasAccess = await canAccessCourse(session.user.id, courseId);
+    if (!hasAccess) {
+      return NextResponse.json(
+        { error: 'Vous n\'avez pas accès à ce cours.' },
+        { status: 403 }
       );
     }
 
@@ -91,7 +101,6 @@ export async function GET(req: NextRequest) {
           slug: true,
           thumbnail: true,
           duration: true,
-          level: true,
           theme: true,
         },
       },

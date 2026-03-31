@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Lock, Play, Loader2, AlertCircle } from "lucide-react";
 import Link from "next/link";
 
@@ -10,6 +10,7 @@ interface VideoPlayerProps {
   thumbnail?: string | null;
   title: string;
   isLocked: boolean;
+  courseId?: string;
 }
 
 export default function VideoPlayer({
@@ -17,11 +18,25 @@ export default function VideoPlayer({
   thumbnail,
   title,
   isLocked,
+  courseId,
 }: VideoPlayerProps) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchedRef = useRef(false);
+  const lastSavedProgressRef = useRef(0);
+
+  const saveProgress = useCallback((progress: number, completed: boolean) => {
+    if (!courseId) return;
+    const rounded = Math.round(progress);
+    if (Math.abs(rounded - lastSavedProgressRef.current) < 5 && !completed) return;
+    lastSavedProgressRef.current = rounded;
+    fetch("/api/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ courseId, progress: rounded, completed }),
+    }).catch(() => {});
+  }, [courseId]);
 
   useEffect(() => {
     if (isLocked || !apiUrl || fetchedRef.current) return;
@@ -65,7 +80,7 @@ export default function VideoPlayer({
           <Lock className="w-12 h-12 text-white/80" />
           <p className="text-lg font-heading font-semibold">Contenu réservé</p>
           <p className="text-sm text-white/60 text-center max-w-xs">
-            Abonnez-vous ou achetez ce cours pour accéder à la vidéo complète
+            Abonnez-vous ou louez ce cours pour accéder à la vidéo complète
           </p>
           <Link
             href="/tarifs"
@@ -107,6 +122,14 @@ export default function VideoPlayer({
           onContextMenu={(e) => e.preventDefault()}
           className="w-full h-full"
           poster={thumbnail || undefined}
+          preload="metadata"
+          onTimeUpdate={(e) => {
+            const video = e.currentTarget;
+            if (!video.duration) return;
+            const pct = (video.currentTime / video.duration) * 100;
+            saveProgress(pct, false);
+          }}
+          onEnded={() => saveProgress(100, true)}
         >
           Votre navigateur ne supporte pas la lecture vidéo.
         </video>

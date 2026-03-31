@@ -11,16 +11,8 @@ interface FilterBarProps {
 export interface FilterState {
   search: string;
   theme: string;
-  level: string;
   duration: string;
 }
-
-const levels = [
-  { value: "", label: "Tous les niveaux" },
-  { value: "BEGINNER", label: "Débutant" },
-  { value: "INTERMEDIATE", label: "Intermédiaire" },
-  { value: "ADVANCED", label: "Avancé" },
-];
 
 const durations = [
   { value: "", label: "Toutes les durées" },
@@ -34,7 +26,6 @@ export default function FilterBar({ themes, onFilterChange }: FilterBarProps) {
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     theme: "",
-    level: "",
     duration: "",
   });
   const [showFilters, setShowFilters] = useState(false);
@@ -46,12 +37,12 @@ export default function FilterBar({ themes, onFilterChange }: FilterBarProps) {
   };
 
   const clearFilters = () => {
-    const cleared: FilterState = { search: "", theme: "", level: "", duration: "" };
+    const cleared: FilterState = { search: "", theme: "", duration: "" };
     setFilters(cleared);
     onFilterChange(cleared);
   };
 
-  const hasActiveFilters = filters.theme || filters.level || filters.duration;
+  const hasActiveFilters = filters.theme || filters.duration;
 
   return (
     <div className="space-y-4 mb-4">
@@ -83,7 +74,7 @@ export default function FilterBar({ themes, onFilterChange }: FilterBarProps) {
       {/* Filter options */}
       {showFilters && (
         <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Theme */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-heading">Thème</label>
@@ -96,22 +87,6 @@ export default function FilterBar({ themes, onFilterChange }: FilterBarProps) {
                 {themes.map((theme) => (
                   <option key={theme} value={theme}>
                     {theme}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Level */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-heading">Niveau</label>
-              <select
-                value={filters.level}
-                onChange={(e) => updateFilter("level", e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-background border border-border text-text focus:outline-none focus:ring-2 focus:ring-button/30"
-              >
-                {levels.map((l) => (
-                  <option key={l.value} value={l.value}>
-                    {l.label}
                   </option>
                 ))}
               </select>

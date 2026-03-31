@@ -44,6 +44,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Idempotence atomique : ignorer les événements déjà traités
+  try {
+    await prisma.stripeEvent.create({ data: { id: event.id } });
+  } catch (err: unknown) {
+    // P2002 = unique constraint violation → événement déjà traité
+    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'P2002') {
+      return NextResponse.json({ received: true });
+    }
+    throw err;
+  }
+
   try {
     switch (event.type) {
       // ─── Paiement unitaire réussi ───
@@ -55,6 +66,11 @@ export async function POST(req: NextRequest) {
 
         // Achat unitaire
         if (type === 'course' || type === 'formation') {
+          // Location 72h pour les cours, accès permanent pour les formations
+          const expiresAt = type === 'course'
+            ? new Date(Date.now() + 72 * 60 * 60 * 1000)
+            : undefined;
+
           await prisma.purchase.create({
             data: {
               userId,
@@ -63,6 +79,7 @@ export async function POST(req: NextRequest) {
                 : { formationId: itemId }),
               amount: (session.amount_total || 0) / 100,
               stripePaymentId: session.payment_intent as string,
+              ...(expiresAt ? { expiresAt } : {}),
             },
           });
         }

@@ -10,7 +10,7 @@ async function checkAdmin() {
   return session;
 }
 
-// GET - Statistiques abonnements et achats
+// GET - Statistiques revenus : abonnements, achats formations, locations cours
 export async function GET() {
   const session = await checkAdmin();
   if (!session) {
@@ -19,7 +19,7 @@ export async function GET() {
 
   const [
     subscriptions,
-    purchases,
+    allPurchases,
     monthlySubs,
     annualSubs,
     totalPurchaseRevenue,
@@ -37,7 +37,6 @@ export async function GET() {
         formation: { select: { id: true, title: true, slug: true } },
       },
       orderBy: { createdAt: 'desc' },
-      take: 50,
     }),
     prisma.subscription.count({
       where: { plan: 'MONTHLY', status: 'ACTIVE' },
@@ -51,14 +50,22 @@ export async function GET() {
     }),
   ]);
 
+  // Séparer achats formations vs locations cours
+  const formationPurchases = allPurchases.filter(p => p.formationId != null);
+  const courseRentals = allPurchases.filter(p => p.courseId != null);
+
   return NextResponse.json({
     subscriptions,
-    purchases,
+    formationPurchases,
+    courseRentals,
     stats: {
       monthlyActive: monthlySubs,
       annualActive: annualSubs,
-      totalPurchases: totalPurchaseRevenue._count,
-      purchaseRevenue: totalPurchaseRevenue._sum.amount || 0,
+      totalFormationPurchases: formationPurchases.length,
+      formationRevenue: formationPurchases.reduce((sum, p) => sum + p.amount, 0),
+      totalCourseRentals: courseRentals.length,
+      courseRentalRevenue: courseRentals.reduce((sum, p) => sum + p.amount, 0),
+      totalRevenue: (totalPurchaseRevenue._sum.amount || 0),
     },
   });
 }

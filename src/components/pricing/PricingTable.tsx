@@ -22,12 +22,12 @@ interface PricingTableProps {
 
 const defaultPlans: PricingPlan[] = [
   {
-    name: "À l'unité",
-    price: 9.99,
+    name: "Location 72h",
+    price: 10,
     interval: "par cours",
-    description: "Achetez les cours qui vous intéressent",
+    description: "Louez les cours qui vous intéressent",
     features: [
-      "Accès illimité au cours acheté",
+      "Accès 72h au cours loué",
       "Suivi de progression",
       "Accès depuis tous vos appareils",
       "Pas d'engagement",
@@ -35,7 +35,7 @@ const defaultPlans: PricingPlan[] = [
   },
   {
     name: "Mensuel",
-    price: 19.99,
+    price: 22,
     interval: "par mois",
     description: "Accès illimité à tous les cours vidéo",
     features: [
@@ -48,12 +48,12 @@ const defaultPlans: PricingPlan[] = [
   },
   {
     name: "Annuel",
-    price: 14.99,
-    interval: "par mois",
-    description: "Le meilleur tarif — économisez 25%",
+    price: 200,
+    interval: "par an",
+    description: "Le meilleur tarif — économisez 24%",
     features: [
       "Tous les cours vidéo en illimité",
-      "Économisez 25%",
+      "Économisez 24%",
       "Accès prioritaire aux nouveautés",
       "Suivi de progression",
     ],
@@ -78,10 +78,10 @@ export default function PricingTable({ plans = defaultPlans }: PricingTableProps
             }`}
           >
             {plan.badge && (
-              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                <Badge variant="premium" className="px-4 py-1 text-sm font-semibold bg-button text-white">
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                <span className="inline-block bg-heading text-background text-xs font-bold uppercase tracking-wider px-4 py-1.5 rounded-full shadow-md">
                   {plan.badge}
-                </Badge>
+                </span>
               </div>
             )}
 
@@ -99,7 +99,7 @@ export default function PricingTable({ plans = defaultPlans }: PricingTableProps
               </div>
               {plan.name === "Annuel" && (
                 <p className="text-sm text-button mt-2 font-medium">
-                  soit {(plan.price * 12).toFixed(0)} €/an
+                  soit {((plan.price / 12)).toFixed(2).replace(".", ",")} €/mois
                 </p>
               )}
             </div>

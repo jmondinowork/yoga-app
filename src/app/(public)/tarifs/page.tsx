@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
-import PricingTable from "@/components/pricing/PricingTable";
+import TarifsClient from "@/components/pricing/TarifsClient";
 import Accordion from "@/components/ui/Accordion";
+import { getContents, getContent } from "@/lib/content";
 
-export const metadata: Metadata = {
-  title: "Tarifs",
-  description: "Découvrez nos formules d'abonnement et nos tarifs de cours à l'unité. Trouvez le plan qui vous convient.",
-};
-
-const pricingFaq = [
+const defaultPricingFaq = [
   {
     question: "Quelle est la différence entre les cours et les formations ?",
-    answer: "Les cours vidéo sont des séances individuelles disponibles à l'achat unique ou via l'abonnement. Les formations sont des programmes complets avec vidéos exclusives, livret PDF et un accompagnement personnalisé d'un an avec Mathilde Torrez. Les formations sont disponibles uniquement à l'achat.",
+    answer: "Les cours vidéo sont des séances individuelles accessibles en location 72h ou en illimité via l'abonnement. Les formations sont des programmes complets avec vidéos exclusives, livret PDF et un accompagnement personnalisé d'un an avec Mathilde Torrez. Les formations sont disponibles uniquement à l'achat.",
   },
   {
     question: "Puis-je changer de plan à tout moment ?",
@@ -25,8 +21,8 @@ const pricingFaq = [
     answer: "Vous pouvez annuler votre abonnement à tout moment depuis votre espace personnel. Vous conserverez l'accès jusqu'à la fin de votre période payée.",
   },
   {
-    question: "Les cours achetés à l'unité expirent-ils ?",
-    answer: "Non ! Un cours acheté à l'unité vous appartient à vie. Vous pouvez le revoir autant de fois que vous le souhaitez.",
+    question: "Combien de temps dure l'accès à un cours loué ?",
+    answer: "Chaque location vous donne accès au cours pendant 72h à compter du paiement. Vous pouvez le revoir autant de fois que vous le souhaitez pendant cette période. Pour un accès illimité, optez pour l'abonnement.",
   },
   {
     question: "Y a-t-il un engagement minimum ?",
@@ -38,22 +34,43 @@ const pricingFaq = [
   },
 ];
 
-export default function TarifsPage() {
+export async function generateMetadata(): Promise<Metadata> {
+  const c = await getContents(["seo_pricing_title", "seo_pricing_description", "seo_pricing_keywords", "seo_pricing_og_title", "seo_pricing_og_description"]);
+  const title = c["seo_pricing_title"] ?? "Tarifs";
+  const description = c["seo_pricing_description"] ?? "Découvrez nos formules d'abonnement et nos tarifs de location de cours. Trouvez le plan qui vous convient.";
+  return {
+    title,
+    description,
+    ...(c["seo_pricing_keywords"] ? { keywords: c["seo_pricing_keywords"].split(",").map((k: string) => k.trim()) } : {}),
+    openGraph: { title: c["seo_pricing_og_title"] || title, description: c["seo_pricing_og_description"] || description },
+  };
+}
+
+export default async function TarifsPage() {
+  const c = await getContents(["pricing_heading", "pricing_description"]);
+  const faqRaw = await getContent("faq_pricing", "[]");
+  let pricingFaq: { question: string; answer: string }[];
+  try {
+    const parsed = JSON.parse(faqRaw);
+    pricingFaq = Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultPricingFaq;
+  } catch {
+    pricingFaq = defaultPricingFaq;
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Header */}
       <div className="text-center mb-14">
         <h1 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
-          Nos Tarifs
+          {c["pricing_heading"] ?? "Nos Tarifs"}
         </h1>
         <p className="text-lg text-text max-w-2xl mx-auto">
-          Choisissez la formule qui vous convient. Cours à l&apos;unité ou
-          abonnement illimité — à vous de décider.
+          {c["pricing_description"] ?? "Choisissez la formule qui vous convient. Location à l\u2019unité ou abonnement illimité — à vous de décider."}
         </p>
       </div>
 
-      {/* Pricing Table */}
-      <PricingTable />
+      {/* Tabs + contenu */}
+      <TarifsClient />
 
       {/* FAQ */}
       <div className="mt-20 max-w-3xl mx-auto">

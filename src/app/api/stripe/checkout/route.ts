@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { SIMULATE_PAYMENTS, stripe, PLANS } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
+import { rateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 // ─── Simulation : crée directement les enregistrements en base ───
 async function handleSimulatedCheckout(
@@ -79,18 +80,33 @@ async function handleSimulatedCheckout(
       if (!item) return NextResponse.json({ error: 'Formation introuvable.' }, { status: 404 });
     }
 
-    const existingPurchase = await prisma.purchase.findFirst({
-      where: {
-        userId,
-        ...(type === 'course' ? { courseId: item.id } : { formationId: item.id }),
-      },
-    });
-    if (existingPurchase) {
-      return NextResponse.json(
-        { error: 'Vous avez déjà acheté cet élément.' },
-        { status: 400 }
-      );
+    // Pour les cours : vérifier si une location active existe déjà
+    if (type === 'course') {
+      const existingRental = await prisma.purchase.findFirst({
+        where: { userId, courseId: item.id, expiresAt: { gt: new Date() } },
+      });
+      if (existingRental) {
+        return NextResponse.json(
+          { error: 'Vous avez déjà une location active pour ce cours.' },
+          { status: 400 }
+        );
+      }
+    } else {
+      const existingPurchase = await prisma.purchase.findFirst({
+        where: { userId, formationId: item.id },
+      });
+      if (existingPurchase) {
+        return NextResponse.json(
+          { error: 'Vous avez déjà acheté cette formation.' },
+          { status: 400 }
+        );
+      }
     }
+
+    // Location 72h pour les cours, accès permanent pour les formations
+    const expiresAt = type === 'course'
+      ? new Date(Date.now() + 72 * 60 * 60 * 1000)
+      : undefined;
 
     await prisma.purchase.create({
       data: {
@@ -98,6 +114,7 @@ async function handleSimulatedCheckout(
         ...(type === 'course' ? { courseId: item.id } : { formationId: item.id }),
         amount: item.price || 0,
         stripePaymentId: `sim_pay_${crypto.randomUUID()}`,
+        ...(expiresAt ? { expiresAt } : {}),
       },
     });
 
@@ -123,6 +140,10 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    // Rate limit : 10 tentatives de checkout par utilisateur par 15 min
+    const rl = rateLimit(`checkout:${session.user.id}`, 10, 15 * 60 * 1000);
+    if (!rl.allowed) return rateLimitResponse(rl.resetAt);
 
     const body = await req.json();
     const { type, planId, courseId } = body;
@@ -238,21 +259,27 @@ export async function POST(req: NextRequest) {
         itemPrice = item.price ? Math.round(item.price * 100) : 0;
       }
 
-      // Vérifier si déjà acheté
-      const existingPurchase = await prisma.purchase.findFirst({
-        where: {
-          userId: user.id,
-          ...(type === 'course'
-            ? { courseId: item.id }
-            : { formationId: item.id }),
-        },
-      });
-
-      if (existingPurchase) {
-        return NextResponse.json(
-          { error: 'Vous avez déjà acheté cet élément.' },
-          { status: 400 }
-        );
+      // Vérifier si déjà loué/acheté
+      if (type === 'course') {
+        const existingRental = await prisma.purchase.findFirst({
+          where: { userId: user.id, courseId: item.id, expiresAt: { gt: new Date() } },
+        });
+        if (existingRental) {
+          return NextResponse.json(
+            { error: 'Vous avez déjà une location active pour ce cours.' },
+            { status: 400 }
+          );
+        }
+      } else {
+        const existingPurchase = await prisma.purchase.findFirst({
+          where: { userId: user.id, formationId: item.id },
+        });
+        if (existingPurchase) {
+          return NextResponse.json(
+            { error: 'Vous avez déjà acheté cette formation.' },
+            { status: 400 }
+          );
+        }
       }
 
       const checkoutSession = await stripe.checkout.sessions.create({
@@ -267,7 +294,7 @@ export async function POST(req: NextRequest) {
                 name: itemName,
                 description:
                   type === 'course'
-                    ? `Accès illimité au cours "${itemName}"`
+                    ? `Location 72h du cours "${itemName}"`
                     : `Accès illimité à la formation "${itemName}"`,
               },
               unit_amount: itemPrice,

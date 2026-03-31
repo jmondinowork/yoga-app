@@ -60,6 +60,36 @@ const emptyFormation = {
   videos: [] as FormationVideo[],
 };
 
+async function extractVideoMetadata(videoFile: File): Promise<{ thumbnail: File | null; durationMin: number }> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    const url = URL.createObjectURL(videoFile);
+    video.src = url;
+    video.currentTime = 1;
+    video.addEventListener("seeked", () => {
+      const durationMin = Math.round(video.duration / 60);
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d")!.drawImage(video, 0, 0);
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+          const thumbnail = blob ? new File([blob], "thumbnail.jpg", { type: "image/jpeg" }) : null;
+          resolve({ thumbnail, durationMin });
+        },
+        "image/jpeg",
+        0.85
+      );
+    });
+    video.addEventListener("error", () => {
+      URL.revokeObjectURL(url);
+      resolve({ thumbnail: null, durationMin: 0 });
+    });
+    video.load();
+  });
+}
+
 export default function AdminFormationsPage() {
   const [formations, setFormations] = useState<Formation[]>([]);
   const [search, setSearch] = useState("");
@@ -69,6 +99,7 @@ export default function AdminFormationsPage() {
   const [form, setForm] = useState(emptyFormation);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
   const [expandedVideos, setExpandedVideos] = useState<Record<number, boolean>>({});
 
   // Multi-select
@@ -82,6 +113,35 @@ export default function AdminFormationsPage() {
   const [guideFile, setGuideFile] = useState<File | null>(null);
   const [videoFiles, setVideoFiles] = useState<Record<number, File>>({});
   const [uploadProgress, setUploadProgress] = useState("");
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+
+  // Drag & drop and thumbnail preview
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
+
+  function uploadWithProgress(
+    fd: FormData,
+    onProgress: (pct: number) => void
+  ): Promise<{ key: string }> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/admin/upload");
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          const err = JSON.parse(xhr.responseText || '{"error":"Erreur serveur"}');
+          reject(new Error(err.error || "Erreur upload"));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Erreur réseau"));
+      xhr.send(fd);
+    });
+  }
 
   const fetchFormations = useCallback(async () => {
     setLoading(true);
@@ -120,10 +180,11 @@ export default function AdminFormationsPage() {
     setGuideFile(null);
     setVideoFiles({});
     setUploadProgress("");
+    setThumbnailPreviewUrl(null);
     setShowModal(true);
   }
 
-  function openEdit(formation: Formation) {
+  async function openEdit(formation: Formation) {
     setEditingId(formation.id);
     setForm({
       title: formation.title,
@@ -141,7 +202,18 @@ export default function AdminFormationsPage() {
     setGuideFile(null);
     setVideoFiles({});
     setUploadProgress("");
+    setThumbnailPreviewUrl(null);
     setShowModal(true);
+
+    if (formation.thumbnail) {
+      try {
+        const res = await fetch(`/api/admin/formations/${formation.id}/thumbnail-url`);
+        if (res.ok) {
+          const { url } = await res.json();
+          setThumbnailPreviewUrl(url);
+        }
+      } catch {}
+    }
   }
 
   function sanitizeFilename(title: string) {
@@ -196,27 +268,38 @@ export default function AdminFormationsPage() {
 
       // Upload vidéos
       const videoKeys: Record<number, string> = {};
-      for (const [indexStr, file] of Object.entries(videoFiles)) {
+      const videoEntries = Object.entries(videoFiles);
+      for (let ei = 0; ei < videoEntries.length; ei++) {
+        const [indexStr, file] = videoEntries[ei];
         const index = parseInt(indexStr);
         const video = form.videos[index];
         if (!video) continue;
 
+        const isMp4 = file.type === "video/mp4";
         const sortOrder = String(index + 1).padStart(2, "0");
         const name = sanitizeFilename(video.title || "video");
         const videoFilename = `${sortOrder}-${name}.mp4`;
 
-        setUploadProgress(`Upload vidéo ${index + 1}/${form.videos.length}...`);
+        setUploadPercent(0);
+        setUploadProgress(`Envoi vidéo ${ei + 1}/${videoEntries.length}…`);
         const fd = new FormData();
         fd.append("file", file);
         fd.append("type", "formation-video");
         fd.append("slug", form.slug);
         fd.append("videoFilename", videoFilename);
-        const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || `Erreur upload vidéo ${index + 1}`);
-        }
-        videoKeys[index] = (await res.json()).key;
+        const { key } = await uploadWithProgress(fd, (pct) => {
+          if (pct < 100) {
+            setUploadPercent(pct);
+            setUploadProgress(`Envoi vidéo ${ei + 1}/${videoEntries.length}… ${pct}%`);
+          } else {
+            setUploadPercent(null);
+            setUploadProgress(isMp4
+              ? `Traitement vidéo ${ei + 1}/${videoEntries.length}…`
+              : `Conversion vidéo ${ei + 1}/${videoEntries.length} en MP4…`);
+          }
+        });
+        videoKeys[index] = key;
+        setUploadPercent(null);
       }
 
       setUploadProgress("Enregistrement...");
@@ -261,12 +344,15 @@ export default function AdminFormationsPage() {
       setThumbnailFile(null);
       setGuideFile(null);
       setVideoFiles({});
+      setToast(editingId ? "Formation modifiée avec succès ✓" : "Formation créée avec succès ✓");
+      setTimeout(() => setToast(null), 3000);
       fetchFormations();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur de connexion");
     } finally {
       setSaving(false);
       setUploadProgress("");
+      setUploadPercent(null);
     }
   }
 
@@ -277,9 +363,12 @@ export default function AdminFormationsPage() {
       const res = await fetch(`/api/admin/formations/${id}`, { method: "DELETE" });
       if (res.ok) {
         fetchFormations();
+        setToast("Formation supprimée ✓");
+        setTimeout(() => setToast(null), 3000);
       }
     } catch {
-      console.error("Erreur lors de la suppression");
+      setToast("Erreur lors de la suppression");
+      setTimeout(() => setToast(null), 3000);
     }
   }
 
@@ -324,6 +413,32 @@ export default function AdminFormationsPage() {
     setForm({ ...form, videos: updated });
   }
 
+  function handleDrop(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return;
+    const updated = [...form.videos];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    // Reindex video files
+    const oldFiles = { ...videoFiles };
+    const newVideoFiles: Record<number, File> = {};
+    const keys = Object.keys(oldFiles).map(Number);
+    for (const k of keys) {
+      let newK = k;
+      if (k === fromIndex) {
+        newK = toIndex;
+      } else if (fromIndex < toIndex) {
+        if (k > fromIndex && k <= toIndex) newK = k - 1;
+      } else {
+        if (k >= toIndex && k < fromIndex) newK = k + 1;
+      }
+      newVideoFiles[newK] = oldFiles[k];
+    }
+    setVideoFiles(newVideoFiles);
+    setForm({ ...form, videos: updated });
+    setDragIndex(null);
+    setDragOverIndex(null);
+  }
+
   function getTotalDuration(videos: FormationVideo[]) {
     const total = videos.reduce((acc, v) => acc + (v.duration || 0), 0);
     const h = Math.floor(total / 60);
@@ -364,9 +479,12 @@ export default function AdminFormationsPage() {
         setShowBulkPrice(false);
         setBulkPrice("");
         fetchFormations();
+        setToast("Prix mis à jour ✓");
+        setTimeout(() => setToast(null), 3000);
       }
     } catch {
-      console.error("Erreur lors de la mise à jour en lot");
+      setToast("Erreur lors de la mise à jour en lot");
+      setTimeout(() => setToast(null), 3000);
     } finally {
       setBulkSaving(false);
     }
@@ -387,9 +505,12 @@ export default function AdminFormationsPage() {
       if (res.ok) {
         setSelected(new Set());
         fetchFormations();
+        setToast("Publication mise à jour ✓");
+        setTimeout(() => setToast(null), 3000);
       }
     } catch {
-      console.error("Erreur lors de la mise à jour en lot");
+      setToast("Erreur lors de la mise à jour en lot");
+      setTimeout(() => setToast(null), 3000);
     } finally {
       setBulkSaving(false);
     }
@@ -399,6 +520,13 @@ export default function AdminFormationsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-[100] bg-card border border-border rounded-xl px-4 py-3 shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <span className="text-sm font-medium text-heading">{toast}</span>
+          <button onClick={() => setToast(null)} className="text-muted hover:text-heading text-xs cursor-pointer">✕</button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-3xl font-bold text-heading mb-2">
@@ -580,63 +708,41 @@ export default function AdminFormationsPage() {
       {/* Modal Création / Édition */}
       <Modal
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={() => { if (!saving) setShowModal(false); }}
         title={editingId ? "Modifier la formation" : "Nouvelle formation"}
         size="lg"
       >
-        <form onSubmit={handleSubmit} className="space-y-6 max-h-[75vh] overflow-y-auto pr-1">
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
-              {error}
-            </div>
-          )}
+        <div className="max-h-[75vh] overflow-y-auto px-1 -mx-1">
+          <form id="formation-form" onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+                {error}
+              </div>
+            )}
 
-          {/* Infos de base */}
-          <div className="space-y-4">
-            <h3 className="font-heading text-lg font-semibold text-heading">
-              Informations générales
-            </h3>
+            {/* Infos de base */}
+            <div className="space-y-4">
+              <h3 className="font-heading text-lg font-semibold text-heading">
+                Informations générales
+              </h3>
 
-            <div>
-              <label className="block text-sm font-medium text-text mb-1">Titre</label>
-              <Input
-                value={form.title}
-                onChange={(e) => {
-                  const title = e.target.value;
-                  setForm({
-                    ...form,
-                    title,
-                    slug: editingId ? form.slug : generateSlug(title),
-                  });
-                }}
-                placeholder="Titre de la formation"
-                required
-              />
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-text mb-1">Titre</label>
+                <Input
+                  value={form.title}
+                  onChange={(e) => {
+                    const title = e.target.value;
+                    setForm({
+                      ...form,
+                      title,
+                      slug: generateSlug(title),
+                    });
+                  }}
+                  placeholder="Titre de la formation"
+                  required
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-text mb-1">Slug</label>
-              <Input
-                value={form.slug}
-                onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                placeholder="slug-de-la-formation"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-text mb-1">Description</label>
-              <textarea
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Description détaillée de la formation..."
-                rows={4}
-                className="w-full px-4 py-2.5 rounded-xl bg-card border border-border text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-button/30 resize-y"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-text mb-1">Prix (€)</label>
                 <Input
@@ -648,314 +754,293 @@ export default function AdminFormationsPage() {
                   placeholder="Prix de la formation"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-text mb-1">Miniature</label>
-                {form.thumbnail && !thumbnailFile && (
-                  <div className="mb-2 flex items-center gap-2 text-xs">
-                    <ImageIcon className="w-3.5 h-3.5 text-green-600" />
-                    <span className="text-green-600 font-medium">Image actuelle</span>
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, thumbnail: "" })}
-                      className="text-red-400 hover:text-red-600 ml-auto"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                {thumbnailFile && (
-                  <div className="mb-2 flex items-center gap-2 text-xs">
-                    <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
-                    <span className="text-blue-600 truncate">{thumbnailFile.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => setThumbnailFile(null)}
-                      className="text-red-400 hover:text-red-600 ml-auto"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer text-sm text-muted">
-                  <Upload className="w-4 h-4" />
-                  {thumbnailFile ? "Changer" : form.thumbnail ? "Remplacer" : "Choisir une image"}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) setThumbnailFile(e.target.files[0]);
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-text mb-1">
-                Livret PDF
-              </label>
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-muted shrink-0" />
-                <div className="flex-1">
-                  {form.bookletUrl && !guideFile && (
-                    <div className="mb-2 flex items-center gap-2 text-xs">
-                      <span className="text-green-600 font-medium">PDF actuel</span>
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, bookletUrl: "" })}
-                        className="text-red-400 hover:text-red-600 ml-auto"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                  {guideFile && (
-                    <div className="mb-2 flex items-center gap-2 text-xs">
-                      <span className="text-blue-600 truncate">{guideFile.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => setGuideFile(null)}
-                        className="text-red-400 hover:text-red-600 ml-auto"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                  <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer text-sm text-muted">
-                    <Upload className="w-4 h-4" />
-                    {guideFile ? "Changer" : form.bookletUrl ? "Remplacer" : "Choisir un PDF"}
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) setGuideFile(e.target.files[0]);
-                      }}
-                    />
+              {/* Image + PDF side by side */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Image de la formation */}
+                <div className="rounded-xl border border-border overflow-hidden bg-card">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+                    <span className="text-xs font-semibold text-heading">Image de la formation</span>
+                    {(form.thumbnail || thumbnailFile) ? (
+                      <span className="text-xs text-green-600 font-medium">✓ {thumbnailFile ? "Nouveau" : "Actuelle"}</span>
+                    ) : (
+                      <span className="text-xs text-muted">Vide</span>
+                    )}
+                  </div>
+                  <label className="block w-full aspect-[4/3] cursor-pointer">
+                    {thumbnailFile ? (
+                      <img src={URL.createObjectURL(thumbnailFile)} alt="Nouvelle image" className="w-full h-full object-cover" />
+                    ) : form.thumbnail && thumbnailPreviewUrl ? (
+                      <img src={thumbnailPreviewUrl} alt="Image actuelle" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-primary/10 flex flex-col items-center justify-center gap-2 hover:bg-primary/20 transition-colors">
+                        <ImageIcon className="w-6 h-6 text-muted/50" />
+                        <span className="text-xs text-muted">Choisir une image</span>
+                      </div>
+                    )}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setThumbnailFile(e.target.files[0]); }} />
                   </label>
+                  <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-card">
+                    <label className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-text py-1.5 rounded-lg border border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer">
+                      <Upload className="w-3 h-3" />
+                      {thumbnailFile ? "Changer" : form.thumbnail ? "Remplacer" : "Ajouter"}
+                      <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setThumbnailFile(e.target.files[0]); }} />
+                    </label>
+                    {(form.thumbnail || thumbnailFile) && (
+                      <button type="button" onClick={() => { setThumbnailFile(null); setThumbnailPreviewUrl(null); setForm({ ...form, thumbnail: "" }); }} className="flex items-center justify-center p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition-colors text-red-400 hover:text-red-600" title="Supprimer">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Livret PDF */}
+                <div className="rounded-xl border border-border overflow-hidden bg-card">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+                    <span className="text-xs font-semibold text-heading">Livret PDF</span>
+                    {(form.bookletUrl || guideFile) ? (
+                      <span className="text-xs text-green-600 font-medium">✓ {guideFile ? "Nouveau" : "Actuel"}</span>
+                    ) : (
+                      <span className="text-xs text-muted">Vide</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-center justify-center aspect-[4/3] px-4">
+                    <FileText className="w-6 h-6 text-muted/50 mb-2" />
+                    {guideFile ? (
+                      <span className="text-xs text-text truncate max-w-full">{guideFile.name}</span>
+                    ) : form.bookletUrl ? (
+                      <span className="text-xs text-text">PDF enregistré</span>
+                    ) : (
+                      <span className="text-xs text-muted">Aucun livret</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-card">
+                    <label className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-text py-1.5 rounded-lg border border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer">
+                      <Upload className="w-3 h-3" />
+                      {guideFile ? "Changer" : form.bookletUrl ? "Remplacer" : "Ajouter"}
+                      <input type="file" accept="application/pdf" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setGuideFile(e.target.files[0]); }} />
+                    </label>
+                    {(form.bookletUrl || guideFile) && (
+                      <button type="button" onClick={() => { setGuideFile(null); setForm({ ...form, bookletUrl: "" }); }} className="flex items-center justify-center p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition-colors text-red-400 hover:text-red-600" title="Supprimer">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text mb-1">Description</label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="Description détaillée de la formation..."
+                  rows={4}
+                  className="w-full px-4 py-2.5 rounded-xl bg-card border border-border text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-button/30 resize-y"
+                  required
+                />
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isPublished}
+                  onChange={(e) => setForm({ ...form, isPublished: e.target.checked })}
+                  className="w-4 h-4 rounded border-border text-button focus:ring-button/30"
+                />
+                <span className="text-sm text-text">Publier la formation</span>
+              </label>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.isPublished}
-                onChange={(e) => setForm({ ...form, isPublished: e.target.checked })}
-                className="w-4 h-4 rounded border-border text-button focus:ring-button/30"
-              />
-              <span className="text-sm text-text">Publier la formation</span>
-            </label>
-          </div>
+            {/* Vidéos */}
+            <div className="space-y-4 border-t border-border pt-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-heading text-lg font-semibold text-heading">
+                  Vidéos ({form.videos.length})
+                </h3>
+                <Button type="button" variant="outline" size="sm" onClick={addVideo}>
+                  <Plus className="w-4 h-4" />
+                  Ajouter une vidéo
+                </Button>
+              </div>
 
-          {/* Vidéos */}
-          <div className="space-y-4 border-t border-border pt-6">
-            <div className="flex items-center justify-between">
-              <h3 className="font-heading text-lg font-semibold text-heading">
-                Vidéos ({form.videos.length})
-              </h3>
-              <Button type="button" variant="outline" size="sm" onClick={addVideo}>
-                <Plus className="w-4 h-4" />
-                Ajouter une vidéo
-              </Button>
-            </div>
-
-            {form.videos.length === 0 ? (
-              <p className="text-sm text-muted text-center py-6">
-                Aucune vidéo ajoutée. Cliquez sur &quot;Ajouter une vidéo&quot; pour commencer.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {form.videos.map((video, index) => (
-                  <div
-                    key={index}
-                    className="bg-primary/20 rounded-xl border border-border overflow-hidden"
-                  >
-                    {/* Header de la vidéo */}
+              {form.videos.length === 0 ? (
+                <p className="text-sm text-muted text-center py-6">
+                  Aucune vidéo ajoutée. Cliquez sur &quot;Ajouter une vidéo&quot; pour commencer.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {form.videos.map((video, index) => (
                     <div
-                      className="flex items-center gap-3 p-3 cursor-pointer hover:bg-primary/30 transition-colors"
-                      onClick={() =>
-                        setExpandedVideos({
-                          ...expandedVideos,
-                          [index]: !expandedVideos[index],
-                        })
-                      }
+                      key={index}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', String(index));
+                        setDragIndex(index);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDragOverIndex(index);
+                      }}
+                      onDragLeave={() => setDragOverIndex(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                        handleDrop(fromIndex, index);
+                      }}
+                      onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                      className={`bg-primary/20 rounded-xl border overflow-hidden transition-all ${
+                        dragOverIndex === index ? 'border-button ring-2 ring-button/30' : 'border-border'
+                      } ${dragIndex === index ? 'opacity-50' : ''}`}
                     >
-                      <GripVertical className="w-4 h-4 text-muted shrink-0" />
-                      <span className="w-6 h-6 rounded-full bg-button/10 flex items-center justify-center text-xs font-medium text-button shrink-0">
-                        {index + 1}
-                      </span>
-                      <span className="flex-1 text-sm font-medium text-heading truncate">
-                        {video.title || "Nouvelle vidéo"}
-                      </span>
-                      {video.duration > 0 && (
-                        <span className="text-xs text-muted">{video.duration} min</span>
-                      )}
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            moveVideo(index, "up");
-                          }}
-                          disabled={index === 0}
-                          className="p-1 hover:bg-primary/40 rounded disabled:opacity-30"
-                        >
-                          <ChevronUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            moveVideo(index, "down");
-                          }}
-                          disabled={index === form.videos.length - 1}
-                          className="p-1 hover:bg-primary/40 rounded disabled:opacity-30"
-                        >
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeVideo(index);
-                          }}
-                          className="p-1 hover:bg-red-100 rounded text-red-500"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                      {/* Header de la vidéo */}
+                      <div
+                        className="flex items-center gap-3 p-3 cursor-pointer hover:bg-primary/30 transition-colors"
+                        onClick={() =>
+                          setExpandedVideos({
+                            ...expandedVideos,
+                            [index]: !expandedVideos[index],
+                          })
+                        }
+                      >
+                        <GripVertical className="w-4 h-4 text-muted shrink-0 cursor-grab active:cursor-grabbing" />
+                        <span className="w-6 h-6 rounded-full bg-button/10 flex items-center justify-center text-xs font-medium text-button shrink-0">
+                          {index + 1}
+                        </span>
+                        <span className="flex-1 text-sm font-medium text-heading truncate">
+                          {video.title || "Nouvelle vidéo"}
+                        </span>
+                        {video.duration > 0 && (
+                          <span className="text-xs text-muted">{video.duration} min</span>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeVideo(index);
+                            }}
+                            className="p-1 hover:bg-red-100 rounded text-red-500"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        {expandedVideos[index] ? (
+                          <ChevronUp className="w-4 h-4 text-muted" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-muted" />
+                        )}
                       </div>
-                      {expandedVideos[index] ? (
-                        <ChevronUp className="w-4 h-4 text-muted" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4 text-muted" />
-                      )}
-                    </div>
 
-                    {/* Détails de la vidéo */}
-                    {expandedVideos[index] && (
-                      <div className="p-4 pt-0 space-y-3 border-t border-border">
-                        <div>
-                          <label className="block text-xs font-medium text-text mb-1">
-                            Titre de la vidéo
-                          </label>
-                          <Input
-                            value={video.title}
-                            onChange={(e) => updateVideo(index, "title", e.target.value)}
-                            placeholder="Titre de la vidéo"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-text mb-1">
-                            Description
-                          </label>
-                          <textarea
-                            value={video.description || ""}
-                            onChange={(e) =>
-                              updateVideo(index, "description", e.target.value)
-                            }
-                            placeholder="Description de la vidéo..."
-                            rows={2}
-                            className="w-full px-3 py-2 rounded-lg bg-card border border-border text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-button/30 text-sm resize-y"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
+                      {/* Détails de la vidéo */}
+                      {expandedVideos[index] && (
+                        <div className="p-4 space-y-3 border-t border-border">
+                          {/* Titre */}
                           <div>
-                            <label className="block text-xs font-medium text-text mb-1">
-                              Vidéo (MP4)
-                            </label>
-                            {video.videoUrl && !videoFiles[index] && (
-                              <div className="mb-1 flex items-center gap-2 text-xs">
-                                <Film className="w-3 h-3 text-green-600" />
-                                <span className="text-green-600 font-medium">Vidéo actuelle</span>
-                                <button
-                                  type="button"
-                                  onClick={() => updateVideo(index, "videoUrl", "")}
-                                  className="text-red-400 hover:text-red-600 ml-auto"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
+                            <label className="block text-xs font-medium text-text mb-1">Titre de la vidéo</label>
+                            <Input value={video.title} onChange={(e) => updateVideo(index, "title", e.target.value)} placeholder="Titre de la vidéo" required />
+                          </div>
+
+                          {/* Description */}
+                          <div>
+                            <label className="block text-xs font-medium text-text mb-1">Description</label>
+                            <textarea value={video.description || ""} onChange={(e) => updateVideo(index, "description", e.target.value)} placeholder="Description..." rows={2} className="w-full px-3 py-2 rounded-lg bg-card border border-border text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-button/30 text-sm resize-y" />
+                          </div>
+
+                          {/* Video file - compact bar */}
+                          <div className="rounded-xl border border-border overflow-hidden bg-card">
+                            <div className="flex items-center gap-3 px-3 py-2.5">
+                              <div className="w-8 h-8 rounded-lg bg-heading/90 flex items-center justify-center shrink-0">
+                                <Film className="w-4 h-4 text-white/70" />
                               </div>
-                            )}
-                            {videoFiles[index] && (
-                              <div className="mb-1 flex items-center gap-2 text-xs">
-                                <Film className="w-3 h-3 text-blue-600" />
-                                <span className="text-blue-600 truncate">
-                                  {videoFiles[index].name} ({(videoFiles[index].size / (1024 * 1024)).toFixed(1)} Mo)
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
+                              <div className="flex-1 min-w-0">
+                                {videoFiles[index] ? (
+                                  <>
+                                    <p className="text-xs font-medium text-heading truncate">{videoFiles[index].name}</p>
+                                    <p className="text-[10px] text-green-600 font-medium">Nouveau fichier{video.duration > 0 ? ` · ${video.duration} min` : ""}</p>
+                                  </>
+                                ) : video.videoUrl ? (
+                                  <>
+                                    <p className="text-xs font-medium text-heading">Vidéo enregistrée</p>
+                                    <p className="text-[10px] text-green-600 font-medium">✓ Actuelle{video.duration > 0 ? ` · ${video.duration} min` : ""}</p>
+                                  </>
+                                ) : (
+                                  <p className="text-xs text-muted">Aucune vidéo</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <label className="flex items-center gap-1.5 text-xs font-medium text-text px-3 py-1.5 rounded-lg border border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer">
+                                  <Upload className="w-3 h-3" />
+                                  {videoFiles[index] ? "Changer" : video.videoUrl ? "Remplacer" : "Ajouter"}
+                                  <input type="file" accept="video/mp4,video/quicktime,video/webm,video/x-msvideo,video/avi,video/x-matroska,.mp4,.mov,.webm,.avi,.mkv,.m4v" className="hidden" onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      setVideoFiles({ ...videoFiles, [index]: file });
+                                      extractVideoMetadata(file).then(({ durationMin }) => {
+                                        if (durationMin > 0) {
+                                          updateVideo(index, "duration", durationMin);
+                                        }
+                                      });
+                                    }
+                                  }} />
+                                </label>
+                                {(video.videoUrl || videoFiles[index]) && (
+                                  <button type="button" onClick={() => {
                                     const next = { ...videoFiles };
                                     delete next[index];
                                     setVideoFiles(next);
-                                  }}
-                                  className="text-red-400 hover:text-red-600 ml-auto"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
+                                    updateVideo(index, "videoUrl", "");
+                                    updateVideo(index, "duration", 0);
+                                  }} className="flex items-center justify-center p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition-colors text-red-400 hover:text-red-600" title="Supprimer">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </div>
-                            )}
-                            <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-dashed border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer text-xs text-muted">
-                              <Upload className="w-3.5 h-3.5" />
-                              {videoFiles[index] ? "Changer" : video.videoUrl ? "Remplacer" : "Fichier MP4"}
-                              <input
-                                type="file"
-                                accept="video/mp4"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    if (file.type !== "video/mp4") {
-                                      setError("Seul le format MP4 est accepté");
-                                      return;
-                                    }
-                                    setVideoFiles({ ...videoFiles, [index]: file });
-                                  }
-                                }}
-                              />
-                            </label>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-text mb-1">
-                              Durée (min)
-                            </label>
-                            <Input
-                              type="number"
-                              min="0"
-                              value={video.duration || ""}
-                              onChange={(e) =>
-                                updateVideo(index, "duration", parseInt(e.target.value) || 0)
-                              }
-                              placeholder="0"
-                            />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </form>
+        </div>
 
-          {/* Actions */}
-          <div className="flex gap-3 justify-end pt-4 border-t border-border sticky bottom-0 bg-card pb-1">
-            {uploadProgress && (
-              <span className="text-sm text-button animate-pulse mr-auto">
-                {uploadProgress}
-              </span>
-            )}
-            <Button type="button" variant="ghost" onClick={() => setShowModal(false)}>
-              Annuler
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? uploadProgress || "Enregistrement..." : editingId ? "Mettre à jour" : "Créer la formation"}
-            </Button>
+        {saving && (
+          <div className="mt-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700 font-medium text-center">
+            ⚠️ Traitement en cours — veuillez ne pas fermer cette fenêtre
           </div>
-        </form>
+        )}
+
+        <div className="flex gap-3 justify-end pt-4 mt-2 border-t border-border">
+          {(saving && uploadProgress) && (
+            <div className="mr-auto flex flex-col gap-1.5 justify-center flex-1 min-w-0">
+              <span className="text-sm text-button font-medium truncate">{uploadProgress}</span>
+              {uploadPercent !== null ? (
+                <div className="w-full bg-primary/20 rounded-full h-1.5">
+                  <div
+                    className="bg-button rounded-full h-1.5 transition-all duration-200"
+                    style={{ width: `${uploadPercent}%` }}
+                  />
+                </div>
+              ) : uploadProgress ? (
+                <div className="w-full bg-primary/20 rounded-full h-1.5 overflow-hidden">
+                  <div className="h-1.5 bg-button rounded-full animate-[progress-indeterminate_1.4s_ease-in-out_infinite] w-1/3" />
+                </div>
+              ) : null}
+            </div>
+          )}
+          <Button type="button" variant="ghost" onClick={() => setShowModal(false)} disabled={saving}>
+            Annuler
+          </Button>
+          <Button type="submit" form="formation-form" disabled={saving}>
+            {saving ? "Traitement…" : editingId ? "Mettre à jour" : "Créer la formation"}
+          </Button>
+        </div>
       </Modal>
     </div>
   );

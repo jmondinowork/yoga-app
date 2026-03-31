@@ -47,6 +47,29 @@ describe('canAccessCourse', () => {
     // Vérifie qu'il n'y a pas eu de vérification purchase inutile
     expect(prismaMock.purchase.findFirst).not.toHaveBeenCalled();
   });
+
+  it('retourne true pour un admin même sans cours', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+    prismaMock.course.findUnique.mockResolvedValue(null);
+    expect(await canAccessCourse('admin-1', 'course-1')).toBe(true);
+  });
+
+  it('retourne false si location expirée', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ includedInSubscription: false });
+    prismaMock.purchase.findFirst.mockResolvedValue({ expiresAt: new Date(Date.now() - 10000) });
+    expect(await canAccessCourse('user-1', 'course-1')).toBe(false);
+  });
+
+  it('retourne true si location non expirée', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ includedInSubscription: false });
+    prismaMock.purchase.findFirst.mockResolvedValue({ expiresAt: new Date(Date.now() + 10000) });
+    expect(await canAccessCourse('user-1', 'course-1')).toBe(true);
+  });
+
+  it('retourne false pour un guest (userId undefined)', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ includedInSubscription: false });
+    expect(await canAccessCourse(undefined, 'course-1')).toBe(false);
+  });
 });
 
 describe('canAccessFormation', () => {
@@ -54,6 +77,12 @@ describe('canAccessFormation', () => {
 
   it('retourne false sans userId', async () => {
     expect(await canAccessFormation(undefined, 'formation-1')).toBe(false);
+  });
+
+  it('retourne true pour un admin même sans achat', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+    prismaMock.purchase.findFirst.mockResolvedValue(null);
+    expect(await canAccessFormation('admin-1', 'formation-1')).toBe(true);
   });
 
   it('retourne true si l\'utilisateur a acheté la formation', async () => {
@@ -88,5 +117,11 @@ describe('hasActiveSubscription', () => {
   it('retourne false si l\'abo est PAST_DUE', async () => {
     prismaMock.subscription.findUnique.mockResolvedValue({ status: 'PAST_DUE' });
     expect(await hasActiveSubscription('user-1')).toBe(false);
+  });
+
+  it('retourne true pour un admin même sans abonnement', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+    prismaMock.subscription.findUnique.mockResolvedValue(null);
+    expect(await hasActiveSubscription('admin-1')).toBe(true);
   });
 });

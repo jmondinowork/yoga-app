@@ -4,13 +4,14 @@ import { Star, Quote } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface Testimonial {
+  id?: string;
   name: string;
   content: string;
   rating: number;
   avatar?: string | null;
 }
 
-const defaultTestimonials: Testimonial[] = [
+const fallbackTestimonials: Testimonial[] = [
   {
     name: "Sophie M.",
     content:
@@ -37,15 +38,16 @@ const defaultTestimonials: Testimonial[] = [
   },
 ];
 
-export default function TestimonialCarousel() {
+export default function TestimonialCarousel({ testimonials }: { testimonials?: Testimonial[] }) {
+  const items = testimonials && testimonials.length > 0 ? testimonials : fallbackTestimonials;
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % defaultTestimonials.length);
+      setCurrentIndex((prev) => (prev + 1) % items.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [items.length]);
 
   return (
     <div className="relative">
@@ -57,14 +59,14 @@ export default function TestimonialCarousel() {
         <div className="min-h-[180px] flex items-center">
           <div className="space-y-4 transition-opacity duration-500">
             <p className="text-lg text-text leading-relaxed italic">
-              &ldquo;{defaultTestimonials[currentIndex].content}&rdquo;
+              &ldquo;{items[currentIndex].content}&rdquo;
             </p>
             <div className="flex items-center justify-center gap-1 mb-2">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Star
                   key={i}
                   className={`w-4 h-4 ${
-                    i < defaultTestimonials[currentIndex].rating
+                    i < items[currentIndex].rating
                       ? "text-amber-400 fill-amber-400"
                       : "text-border"
                   }`}
@@ -72,14 +74,14 @@ export default function TestimonialCarousel() {
               ))}
             </div>
             <p className="font-heading text-lg font-semibold text-heading">
-              {defaultTestimonials[currentIndex].name}
+              {items[currentIndex].name}
             </p>
           </div>
         </div>
 
         {/* Dots */}
         <div className="flex justify-center gap-2 mt-6">
-          {defaultTestimonials.map((_, i) => (
+          {items.map((_, i) => (
             <button
               key={i}
               onClick={() => setCurrentIndex(i)}

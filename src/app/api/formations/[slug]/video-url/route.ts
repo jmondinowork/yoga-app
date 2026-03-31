@@ -37,8 +37,8 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ error: "Paramètre 'filename' requis" }, { status: 400 });
   }
 
-  // Sécurité : empêcher la traversée de répertoire
-  if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+  // Sécurité : whitelist de caractères autorisés (lettres, chiffres, tirets, points, underscores)
+  if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
     return NextResponse.json({ error: "Nom de fichier invalide" }, { status: 400 });
   }
 

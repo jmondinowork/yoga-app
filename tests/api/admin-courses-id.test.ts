@@ -6,6 +6,20 @@ import { NextRequest } from 'next/server';
 import '../mocks/prisma';
 import '../mocks/auth';
 
+// Mock R2, email, and thumbnail dependencies
+vi.mock('@/lib/r2', () => ({
+  getPresignedUrl: vi.fn(),
+  deleteR2Folder: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/lib/email', () => ({
+  sendNewCourseNotification: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/lib/thumbnail', () => ({
+  generateThumbnailFromVideo: vi.fn().mockResolvedValue(null),
+}));
+
 function createRequest(url: string, init?: RequestInit) {
   return new NextRequest(new URL(url, 'http://localhost:3000'), init);
 }
@@ -90,7 +104,7 @@ describe('Admin API /api/admin/courses/[id]', () => {
     });
 
     it('met à jour le cours', async () => {
-      prismaMock.course.findUnique.mockResolvedValue({ id: 'abc', slug: 'yoga' });
+      prismaMock.course.findUnique.mockResolvedValue({ id: 'abc', slug: 'yoga', thumbnail: null, videoUrl: null, isPublished: false });
       prismaMock.course.update.mockResolvedValue({ id: 'abc', title: 'Updated', slug: 'yoga' });
 
       const { PATCH } = await import('@/app/api/admin/courses/[id]/route');
@@ -119,7 +133,7 @@ describe('Admin API /api/admin/courses/[id]', () => {
     });
 
     it('supprime le cours', async () => {
-      prismaMock.course.findUnique.mockResolvedValue({ id: 'abc' });
+      prismaMock.course.findUnique.mockResolvedValue({ id: 'abc', slug: 'yoga' });
       prismaMock.course.delete.mockResolvedValue({ id: 'abc' });
 
       const { DELETE } = await import('@/app/api/admin/courses/[id]/route');

@@ -40,12 +40,6 @@ export default function FormationCard({
             </div>
           )}
 
-          {/* Price */}
-          {price && (
-            <div className="absolute top-3 right-3">
-              <Badge variant="premium">{price} €</Badge>
-            </div>
-          )}
         </div>
 
         {/* Content */}

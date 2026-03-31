@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Check, Play, Lock, Clock, X, Loader2, AlertCircle } from "lucide-react";
 
 interface FormationVideoData {
@@ -28,14 +28,28 @@ function FormationPlayer({
   slug,
   filename,
   title,
+  formationVideoId,
 }: {
   slug: string;
   filename: string;
   title: string;
+  formationVideoId: string;
 }) {
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const lastSavedProgressRef = useRef(0);
+
+  const saveProgress = useCallback((progress: number, completed: boolean) => {
+    const rounded = Math.round(progress);
+    if (Math.abs(rounded - lastSavedProgressRef.current) < 5 && !completed) return;
+    lastSavedProgressRef.current = rounded;
+    fetch("/api/formations/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ formationVideoId, progress: rounded, completed }),
+    }).catch(() => {});
+  }, [formationVideoId]);
 
   useEffect(() => {
     setLoading(true);
@@ -88,6 +102,13 @@ function FormationPlayer({
           disablePictureInPicture
           onContextMenu={(e) => e.preventDefault()}
           className="w-full h-full"
+          onTimeUpdate={(e) => {
+            const video = e.currentTarget;
+            if (!video.duration) return;
+            const pct = (video.currentTime / video.duration) * 100;
+            saveProgress(pct, false);
+          }}
+          onEnded={() => saveProgress(100, true)}
         >
           Votre navigateur ne supporte pas la lecture vidéo.
         </video>
@@ -131,6 +152,7 @@ export default function FormationVideoList({
             slug={slug}
             filename={activeVideo.videoUrl}
             title={activeVideo.title}
+            formationVideoId={activeVideo.id}
             key={activeVideo.id}
           />
         </div>

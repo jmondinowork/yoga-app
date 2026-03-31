@@ -9,6 +9,7 @@ import FormationPdfButton from "@/components/courses/FormationPdfButton";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { getPresignedUrl } from "@/lib/r2";
+import { canAccessFormation } from "@/lib/helpers/access";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -45,14 +46,8 @@ export default async function FormationDetailPage({ params }: Props) {
 
   const session = await auth();
 
-  // Vérifier si l'utilisateur a accès (achat unique seulement)
-  let hasAccess = false;
-  if (session?.user?.id) {
-    const purchase = await prisma.purchase.findFirst({
-      where: { userId: session.user.id, formationId: formation.id },
-    });
-    hasAccess = !!purchase;
-  }
+  // Vérifier si l'utilisateur a accès (achat ou admin)
+  const hasAccess = await canAccessFormation(session?.user?.id, formation.id);
 
   // Progrès des vidéos si l'utilisateur est connecté
   let videoProgressMap: Record<string, { progress: number; completed: boolean }> = {};

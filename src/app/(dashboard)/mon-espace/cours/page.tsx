@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Sparkles } from "lucide-react";
 import Button from "@/components/ui/Button";
-import CourseCard from "@/components/courses/CourseCard";
+import MesCoursClient from "@/components/dashboard/MesCoursClient";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { getPresignedUrl } from "@/lib/r2";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
@@ -23,16 +24,16 @@ export default async function MesCoursPage() {
   });
   const hasActiveSubscription = subscription?.status === "ACTIVE";
 
-  // Cours achetés individuellement
+  // Cours loués individuellement
   const coursePurchases = await prisma.purchase.findMany({
     where: { userId, courseId: { not: null } },
-    select: { courseId: true },
+    select: { courseId: true, expiresAt: true },
   });
   const purchasedCourseIds = coursePurchases
+    .filter((p) => !p.expiresAt || p.expiresAt > new Date())
     .map((p) => p.courseId)
     .filter(Boolean) as string[];
 
-  // Cours accessibles
   // Cours accessibles
   const allPublished = await prisma.course.findMany({
     where: { isPublished: true },
@@ -41,17 +42,14 @@ export default async function MesCoursPage() {
 
   let accessibleCourses = allPublished;
   if (hasActiveSubscription) {
-    // Abonné : tous les cours inclus dans l'abonnement + achetés
     accessibleCourses = allPublished.filter(
       (c) => c.includedInSubscription || purchasedCourseIds.includes(c.id)
     );
   } else if (purchasedCourseIds.length > 0) {
-    // Cours achetés uniquement
     accessibleCourses = allPublished.filter((c) =>
       purchasedCourseIds.includes(c.id)
     );
   } else {
-    // Aucun cours accessible
     accessibleCourses = [];
   }
 
@@ -65,6 +63,24 @@ export default async function MesCoursPage() {
   );
 
   const hasContent = accessibleCourses.length > 0;
+  const otherCoursesCount = allPublished.length - accessibleCourses.length;
+
+  // Générer les presigned URLs pour les thumbnails
+  const coursesWithThumbnails = await Promise.all(
+    accessibleCourses.map(async (c) => {
+      let thumbnail: string | null = null;
+      if (c.thumbnail && !c.thumbnail.startsWith("http")) {
+        try {
+          thumbnail = await getPresignedUrl(c.thumbnail, 7200);
+        } catch {
+          thumbnail = null;
+        }
+      } else {
+        thumbnail = c.thumbnail ?? null;
+      }
+      return { ...c, thumbnail };
+    })
+  );
 
   return (
     <div className="space-y-8">
@@ -82,52 +98,30 @@ export default async function MesCoursPage() {
       </div>
 
       {hasContent ? (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {accessibleCourses.map((course) => (
-              <CourseCard
-                key={course.id}
-                slug={course.slug}
-                title={course.title}
-                thumbnail={course.thumbnail}
-                duration={course.duration}
-                level={course.level as "BEGINNER" | "INTERMEDIATE" | "ADVANCED"}
-                theme={course.theme}
-                price={course.price}
-                includedInSubscription={course.includedInSubscription}
-                progress={progressByCourse[course.id]}
-              />
-            ))}
-          </div>
-
-          {!hasActiveSubscription && (
-            <div className="bg-gradient-to-r from-accent-light/50 to-primary/30 rounded-2xl p-8 text-center space-y-3">
-              <Sparkles className="w-10 h-10 text-button mx-auto" />
-              <h2 className="font-heading text-xl font-bold text-heading">
-                Accédez à tous les cours
-              </h2>
-              <p className="text-sm text-text max-w-md mx-auto">
-                Avec un abonnement, profitez de l&apos;ensemble du catalogue
-                de cours vidéo en illimité.
-              </p>
-              <Link href="/tarifs">
-                <Button>
-                  Voir les abonnements
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </Link>
-            </div>
-          )}
-        </>
+        <MesCoursClient
+          courses={coursesWithThumbnails.map((c) => ({
+            id: c.id,
+            slug: c.slug,
+            title: c.title,
+            thumbnail: c.thumbnail,
+            duration: c.duration,
+            theme: c.theme,
+            price: c.price ?? null,
+            includedInSubscription: c.includedInSubscription,
+          }))}
+          progressByCourse={progressByCourse}
+          hasActiveSubscription={hasActiveSubscription}
+          otherCoursesCount={otherCoursesCount}
+        />
       ) : (
-        <div className="bg-gradient-to-r from-accent-light/50 to-primary/30 rounded-2xl p-10 text-center space-y-4">
+        <div className="bg-linear-to-r from-accent-light/50 to-primary/30 rounded-2xl p-10 text-center space-y-4">
           <Sparkles className="w-12 h-12 text-button mx-auto" />
           <h2 className="font-heading text-2xl font-bold text-heading">
             Découvrez nos cours vidéo
           </h2>
           <p className="text-text max-w-lg mx-auto">
             Explorez notre catalogue de cours pour tous les niveaux : vinyasa,
-            hatha, yin yoga et bien plus. Disponibles à l&apos;unité ou via
+            hatha, yin yoga et bien plus. Disponibles en location 72h ou via
             l&apos;abonnement.
           </p>
           <Link href="/cours">

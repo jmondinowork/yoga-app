@@ -31,16 +31,6 @@ describe('FormationCard', () => {
     expect(link).toHaveAttribute('href', '/formations/yoga-prenatal');
   });
 
-  it('affiche le prix', () => {
-    render(<FormationCard {...baseProps} />);
-    expect(screen.getByText('49.99 €')).toBeInTheDocument();
-  });
-
-  it('n\'affiche pas de badge prix si null', () => {
-    render(<FormationCard {...baseProps} price={null} />);
-    expect(screen.queryByText('€')).not.toBeInTheDocument();
-  });
-
   it('affiche le nombre de vidéos (pluriel)', () => {
     render(<FormationCard {...baseProps} />);
     expect(screen.getByText('12 vidéos')).toBeInTheDocument();

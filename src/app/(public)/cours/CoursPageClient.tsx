@@ -9,7 +9,6 @@ interface Course {
   title: string;
   thumbnail: string | null;
   duration: number;
-  level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
   theme: string;
   price: number | null;
   includedInSubscription: boolean;
@@ -21,7 +20,6 @@ export default function CoursPageClient() {
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     theme: "",
-    level: "",
     duration: "",
   });
 
@@ -30,7 +28,6 @@ export default function CoursPageClient() {
     try {
       const params = new URLSearchParams({ limit: "100" });
       if (filters.theme) params.set("theme", filters.theme);
-      if (filters.level) params.set("level", filters.level);
       if (filters.search) params.set("search", filters.search);
 
       const res = await fetch(`/api/courses?${params}`);
@@ -41,7 +38,7 @@ export default function CoursPageClient() {
     } finally {
       setLoading(false);
     }
-  }, [filters.theme, filters.level, filters.search]);
+  }, [filters.theme, filters.search]);
 
   useEffect(() => {
     fetchCourses();

@@ -19,9 +19,11 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    if (typeof newPassword !== "string" || newPassword.length < 6) {
+    // Même politique que l'inscription : 12 chars, maj, min, chiffre, spécial
+    const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d]).{12,}$/;
+    if (typeof newPassword !== "string" || !PASSWORD_REGEX.test(newPassword)) {
       return NextResponse.json(
-        { error: "Le nouveau mot de passe doit contenir au moins 6 caractères" },
+        { error: "Le mot de passe doit contenir au moins 12 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial" },
         { status: 400 }
       );
     }
@@ -46,7 +48,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     await prisma.user.update({
       where: { id: session.user.id },

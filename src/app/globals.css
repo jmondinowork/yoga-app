@@ -85,3 +85,8 @@ html {
   color: white;
   gap: 1rem;
 }
+
+@keyframes progress-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}

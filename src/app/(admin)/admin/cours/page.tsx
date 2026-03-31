@@ -15,6 +15,8 @@ import {
   Upload,
   ImageIcon,
   Film,
+  Tags,
+  Pencil,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
@@ -29,7 +31,6 @@ interface Course {
   thumbnail: string | null;
   videoUrl: string | null;
   duration: number;
-  level: string;
   theme: string;
   price: number | null;
   includedInSubscription: boolean;
@@ -38,12 +39,6 @@ interface Course {
   _count: { purchases: number; progress: number };
 }
 
-const levelLabels: Record<string, string> = {
-  BEGINNER: "Débutant",
-  INTERMEDIATE: "Intermédiaire",
-  ADVANCED: "Avancé",
-};
-
 const emptyForm = {
   title: "",
   slug: "",
@@ -51,12 +46,41 @@ const emptyForm = {
   thumbnail: "",
   videoUrl: "",
   duration: "",
-  level: "BEGINNER",
   theme: "Vinyasa",
-  price: "",
+  price: "10",
   includedInSubscription: true,
   isPublished: false,
 };
+
+async function extractVideoMetadata(videoFile: File): Promise<{ thumbnail: File | null; durationMin: number }> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    const url = URL.createObjectURL(videoFile);
+    video.src = url;
+    video.currentTime = 1;
+    video.addEventListener("seeked", () => {
+      const durationMin = Math.round(video.duration / 60);
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d")!.drawImage(video, 0, 0);
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+          const thumbnail = blob ? new File([blob], "thumbnail.jpg", { type: "image/jpeg" }) : null;
+          resolve({ thumbnail, durationMin });
+        },
+        "image/jpeg",
+        0.85
+      );
+    });
+    video.addEventListener("error", () => {
+      URL.revokeObjectURL(url);
+      resolve({ thumbnail: null, durationMin: 0 });
+    });
+    video.load();
+  });
+}
 
 export default function AdminCoursPage() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -67,6 +91,7 @@ export default function AdminCoursPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
 
   // Multi-select
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -74,10 +99,120 @@ export default function AdminCoursPage() {
   const [bulkPrice, setBulkPrice] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
 
+  // Themes
+  const [themes, setThemes] = useState<{ name: string; courseCount: number }[]>([]);
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [newThemeName, setNewThemeName] = useState("");
+  const [themeError, setThemeError] = useState("");
+  const [themeSaving, setThemeSaving] = useState(false);
+  const [editingTheme, setEditingTheme] = useState<string | null>(null);
+  const [editingThemeName, setEditingThemeName] = useState("");
+
+  const fetchThemes = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/themes");
+      const data = await res.json();
+      setThemes(data.themes || []);
+    } catch {
+      console.error("Erreur lors du chargement des thèmes");
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchThemes();
+  }, [fetchThemes]);
+
+  async function handleAddTheme() {
+    if (!newThemeName.trim()) return;
+    setThemeSaving(true);
+    setThemeError("");
+    try {
+      const res = await fetch("/api/admin/themes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newThemeName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setThemeError(data.error || "Erreur"); return; }
+      setNewThemeName("");
+      fetchThemes();
+    } catch {
+      setThemeError("Erreur de connexion");
+    } finally {
+      setThemeSaving(false);
+    }
+  }
+
+  async function handleRenameTheme(oldName: string, newName: string) {
+    if (!newName.trim() || newName.trim() === oldName) { setEditingTheme(null); return; }
+    setThemeSaving(true);
+    setThemeError("");
+    try {
+      const res = await fetch("/api/admin/themes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldName, newName: newName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setThemeError(data.error || "Erreur"); return; }
+      setEditingTheme(null);
+      fetchThemes();
+      fetchCourses();
+    } catch {
+      setThemeError("Erreur de connexion");
+    } finally {
+      setThemeSaving(false);
+    }
+  }
+
+  async function handleDeleteTheme(name: string) {
+    setThemeSaving(true);
+    setThemeError("");
+    try {
+      const res = await fetch("/api/admin/themes", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setThemeError(data.error || "Erreur"); return; }
+      fetchThemes();
+    } catch {
+      setThemeError("Erreur de connexion");
+    } finally {
+      setThemeSaving(false);
+    }
+  }
+
   // File uploads
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState("");
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
+
+  function uploadWithProgress(
+    fd: FormData,
+    onProgress: (pct: number) => void
+  ): Promise<{ key: string }> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/admin/upload");
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          const err = JSON.parse(xhr.responseText || '{"error":"Erreur serveur"}');
+          reject(new Error(err.error || "Erreur upload"));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Erreur réseau"));
+      xhr.send(fd);
+    });
+  }
 
   const fetchCourses = useCallback(async () => {
     setLoading(true);
@@ -114,12 +249,13 @@ export default function AdminCoursPage() {
     setForm(emptyForm);
     setError("");
     setThumbnailFile(null);
+    setThumbnailPreviewUrl(null);
     setVideoFile(null);
     setUploadProgress("");
     setShowModal(true);
   }
 
-  function openEdit(course: Course) {
+  async function openEdit(course: Course) {
     setEditingId(course.id);
     setForm({
       title: course.title,
@@ -128,7 +264,6 @@ export default function AdminCoursPage() {
       thumbnail: course.thumbnail || "",
       videoUrl: course.videoUrl || "",
       duration: course.duration.toString(),
-      level: course.level,
       theme: course.theme,
       price: course.price?.toString() || "",
       includedInSubscription: course.includedInSubscription,
@@ -136,9 +271,23 @@ export default function AdminCoursPage() {
     });
     setError("");
     setThumbnailFile(null);
+    setThumbnailPreviewUrl(null);
     setVideoFile(null);
     setUploadProgress("");
     setShowModal(true);
+
+    // Charger l'aperçu de la miniature existante
+    if (course.thumbnail) {
+      try {
+        const res = await fetch(`/api/admin/courses/${course.id}/thumbnail-url`);
+        if (res.ok) {
+          const { url } = await res.json();
+          setThumbnailPreviewUrl(url);
+        }
+      } catch {
+        // silently ignore
+      }
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -171,21 +320,24 @@ export default function AdminCoursPage() {
 
       // Upload vidéo si nouveau fichier sélectionné
       if (videoFile) {
-        setUploadProgress("Upload de la vidéo...");
+        const isMp4 = videoFile.type === "video/mp4";
+        setUploadPercent(0);
+        setUploadProgress("Envoi de la vidéo…");
         const fd = new FormData();
         fd.append("file", videoFile);
         fd.append("type", "course-video");
         fd.append("slug", form.slug);
-        const uploadRes = await fetch("/api/admin/upload", {
-          method: "POST",
-          body: fd,
+        const { key } = await uploadWithProgress(fd, (pct) => {
+          if (pct < 100) {
+            setUploadPercent(pct);
+            setUploadProgress(`Envoi de la vidéo… ${pct}%`);
+          } else {
+            setUploadPercent(null);
+            setUploadProgress(isMp4 ? "Upload vers le stockage…" : "Conversion en MP4…");
+          }
         });
-        if (!uploadRes.ok) {
-          const data = await uploadRes.json();
-          throw new Error(data.error || "Erreur upload vidéo");
-        }
-        const { key } = await uploadRes.json();
         videoKey = key;
+        setUploadPercent(null);
       }
 
       setUploadProgress("");
@@ -197,7 +349,6 @@ export default function AdminCoursPage() {
         thumbnail: thumbnailKey,
         videoUrl: videoKey,
         duration: parseInt(form.duration) || 0,
-        level: form.level,
         theme: form.theme,
         price: form.price ? parseFloat(form.price) : null,
         includedInSubscription: form.includedInSubscription,
@@ -225,6 +376,8 @@ export default function AdminCoursPage() {
       setThumbnailFile(null);
       setVideoFile(null);
       fetchCourses();
+      setToast(editingId ? "Cours modifié avec succès ✓" : "Cours créé avec succès ✓");
+      setTimeout(() => setToast(null), 3000);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Erreur de connexion"
@@ -232,6 +385,7 @@ export default function AdminCoursPage() {
     } finally {
       setSaving(false);
       setUploadProgress("");
+      setUploadPercent(null);
     }
   }
 
@@ -314,9 +468,12 @@ export default function AdminCoursPage() {
         setShowBulkPrice(false);
         setBulkPrice("");
         fetchCourses();
+        setToast("Prix mis à jour ✓");
+        setTimeout(() => setToast(null), 3000);
       }
     } catch {
-      console.error("Erreur lors de la mise à jour en lot");
+      setToast("Erreur lors de la mise à jour en lot");
+      setTimeout(() => setToast(null), 3000);
     } finally {
       setBulkSaving(false);
     }
@@ -339,9 +496,12 @@ export default function AdminCoursPage() {
       if (res.ok) {
         setSelected(new Set());
         fetchCourses();
+        setToast("Abonnement mis à jour ✓");
+        setTimeout(() => setToast(null), 3000);
       }
     } catch {
-      console.error("Erreur lors de la mise à jour en lot");
+      setToast("Erreur lors de la mise à jour en lot");
+      setTimeout(() => setToast(null), 3000);
     } finally {
       setBulkSaving(false);
     }
@@ -364,9 +524,12 @@ export default function AdminCoursPage() {
       if (res.ok) {
         setSelected(new Set());
         fetchCourses();
+        setToast("Publication mise à jour ✓");
+        setTimeout(() => setToast(null), 3000);
       }
     } catch {
-      console.error("Erreur lors de la mise à jour en lot");
+      setToast("Erreur lors de la mise à jour en lot");
+      setTimeout(() => setToast(null), 3000);
     } finally {
       setBulkSaving(false);
     }
@@ -376,6 +539,13 @@ export default function AdminCoursPage() {
 
   return (
     <div className="space-y-6">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-[100] bg-card border border-border rounded-xl px-4 py-3 shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <span className="text-sm font-medium text-heading">{toast}</span>
+          <button onClick={() => setToast(null)} className="text-muted hover:text-heading text-xs cursor-pointer">✕</button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-3xl font-bold text-heading mb-2">
@@ -385,10 +555,16 @@ export default function AdminCoursPage() {
             {courses.length} cours au total
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4" />
-          Nouveau cours
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={() => { setThemeError(""); setShowThemeModal(true); }}>
+            <Tags className="w-4 h-4" />
+            Gérer les thèmes
+          </Button>
+          <Button onClick={openCreate}>
+            <Plus className="w-4 h-4" />
+            Nouveau cours
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -521,9 +697,6 @@ export default function AdminCoursPage() {
                     Thème
                   </th>
                   <th className="text-left p-4 text-sm font-medium text-heading">
-                    Niveau
-                  </th>
-                  <th className="text-left p-4 text-sm font-medium text-heading">
                     Durée
                   </th>
                   <th className="text-left p-4 text-sm font-medium text-heading">
@@ -562,16 +735,10 @@ export default function AdminCoursPage() {
                     </td>
                     <td className="p-4">
                       <p className="font-medium text-heading">{course.title}</p>
-                      <p className="text-xs text-muted">
-                        {course.slug} · {course._count.purchases} achat
-                        {course._count.purchases > 1 ? "s" : ""}
-                      </p>
+                      <p className="text-xs text-muted">{course.slug}</p>
                     </td>
                     <td className="p-4">
                       <Badge>{course.theme}</Badge>
-                    </td>
-                    <td className="p-4 text-sm text-text">
-                      {levelLabels[course.level] || course.level}
                     </td>
                     <td className="p-4 text-sm text-text">
                       {course.duration} min
@@ -617,19 +784,6 @@ export default function AdminCoursPage() {
                           <Edit className="w-4 h-4 text-muted" />
                         </button>
                         <button
-                          onClick={() => handleTogglePublish(course)}
-                          className="p-2 rounded-lg hover:bg-primary/30 transition-colors cursor-pointer"
-                          title={
-                            course.isPublished ? "Dépublier" : "Publier"
-                          }
-                        >
-                          {course.isPublished ? (
-                            <EyeOff className="w-4 h-4 text-muted" />
-                          ) : (
-                            <Eye className="w-4 h-4 text-muted" />
-                          )}
-                        </button>
-                        <button
                           onClick={() => handleDelete(course.id, course.title)}
                           className="p-2 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
                           title="Supprimer"
@@ -646,14 +800,112 @@ export default function AdminCoursPage() {
         </div>
       )}
 
+      {/* Modal Gestion des thèmes */}
+      <Modal
+        isOpen={showThemeModal}
+        onClose={() => setShowThemeModal(false)}
+        title="Gérer les thèmes"
+      >
+        <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
+          {themeError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+              {themeError}
+            </div>
+          )}
+
+          {/* Liste des thèmes */}
+          <div className="space-y-2">
+            {themes.length === 0 ? (
+              <p className="text-sm text-muted text-center py-4">Aucun thème créé</p>
+            ) : (
+              themes.map((t) => (
+                <div
+                  key={t.name}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-primary/10 border border-border"
+                >
+                  {editingTheme === t.name ? (
+                    <>
+                      <input
+                        type="text"
+                        value={editingThemeName}
+                        onChange={(e) => setEditingThemeName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleRenameTheme(t.name, editingThemeName);
+                          if (e.key === "Escape") setEditingTheme(null);
+                        }}
+                        autoFocus
+                        className="flex-1 px-3 py-1.5 rounded-lg bg-card border border-border text-text text-sm focus:outline-none focus:ring-2 focus:ring-button/30"
+                      />
+                      <button
+                        onClick={() => handleRenameTheme(t.name, editingThemeName)}
+                        disabled={themeSaving}
+                        className="text-xs font-medium text-button hover:text-button/80 transition-colors disabled:opacity-50"
+                      >
+                        Sauvegarder
+                      </button>
+                      <button
+                        onClick={() => setEditingTheme(null)}
+                        className="text-xs text-muted hover:text-text transition-colors"
+                      >
+                        Annuler
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-sm font-medium text-heading">{t.name}</span>
+                      <span className="text-xs text-muted">{t.courseCount} cours</span>
+                      <button
+                        onClick={() => { setEditingTheme(t.name); setEditingThemeName(t.name); setThemeError(""); }}
+                        className="p-1.5 rounded-lg hover:bg-primary/30 transition-colors cursor-pointer"
+                        title="Renommer"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-muted" />
+                      </button>
+                      <button
+                        onClick={() => { setThemeError(""); handleDeleteTheme(t.name); }}
+                        disabled={t.courseCount > 0 || themeSaving}
+                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                        title={t.courseCount > 0 ? `Utilisé par ${t.courseCount} cours` : "Supprimer"}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Ajouter un thème */}
+          <div className="border-t border-border pt-4">
+            <p className="text-sm font-medium text-heading mb-2">Ajouter un thème</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newThemeName}
+                onChange={(e) => setNewThemeName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTheme(); } }}
+                placeholder="Nom du thème..."
+                className="flex-1 px-3 py-2 rounded-xl bg-card border border-border text-text text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-button/30"
+              />
+              <Button onClick={handleAddTheme} disabled={themeSaving || !newThemeName.trim()} size="sm">
+                <Plus className="w-4 h-4" />
+                Ajouter
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
       {/* Modal Création / Édition */}
       <Modal
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={() => { if (!saving) setShowModal(false); }}
         title={editingId ? "Modifier le cours" : "Nouveau cours"}
         size="lg"
       >
-        <form onSubmit={handleSubmit} className="space-y-6 max-h-[75vh] overflow-y-auto pr-1">
+        <div className="max-h-[75vh] overflow-y-auto px-1 -mx-1">
+        <form id="course-form" onSubmit={handleSubmit} className="space-y-5">
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
               {error}
@@ -661,139 +913,89 @@ export default function AdminCoursPage() {
           )}
 
           <div className="space-y-4">
+            {/* Titre */}
             <div>
               <label className="block text-sm font-medium text-text mb-1">Titre</label>
               <Input
                 value={form.title}
                 onChange={(e) => {
                   const title = e.target.value;
-                  setForm({
-                    ...form,
-                    title,
-                    slug: editingId ? form.slug : generateSlug(title),
-                  });
+                  setForm({ ...form, title, slug: generateSlug(title) });
                 }}
                 placeholder="Nom du cours"
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-text mb-1">Slug</label>
-              <Input
-                value={form.slug}
-                onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                placeholder="nom-du-cours"
-                required
-              />
-            </div>
-
+            {/* Thème + Prix */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-heading">
-                  Thème
-                </label>
+                <label className="block text-sm font-medium text-heading">Thème</label>
                 <select
                   value={form.theme}
                   onChange={(e) => setForm({ ...form, theme: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl bg-card border border-border text-text focus:outline-none focus:ring-2 focus:ring-button/30"
                 >
-                  <option>Vinyasa</option>
-                  <option>Hatha</option>
-                  <option>Yin Yoga</option>
-                  <option>Yin</option>
-                  <option>Méditation</option>
-                  <option>Power Yoga</option>
-                  <option>Restauratif</option>
-                  <option>Respiration</option>
-                  <option>Pranayama</option>
-                  <option>Prénatal</option>
-                  <option>Ashtanga</option>
+                  {themes.length > 0 ? (
+                    themes.map((t) => (
+                      <option key={t.name} value={t.name}>{t.name}</option>
+                    ))
+                  ) : (
+                    <option value={form.theme}>{form.theme}</option>
+                  )}
                 </select>
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-heading">
-                  Niveau
-                </label>
-                <select
-                  value={form.level}
-                  onChange={(e) => setForm({ ...form, level: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl bg-card border border-border text-text focus:outline-none focus:ring-2 focus:ring-button/30"
-                >
-                  <option value="BEGINNER">Débutant</option>
-                  <option value="INTERMEDIATE">Intermédiaire</option>
-                  <option value="ADVANCED">Avancé</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-text mb-1">
-                  Durée (min)
-                </label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={form.duration}
-                  onChange={(e) =>
-                    setForm({ ...form, duration: e.target.value })
-                  }
-                  placeholder="30"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text mb-1">
-                  Prix (€)
-                </label>
+                <label className="block text-sm font-medium text-text mb-1">Prix location 72h (€)</label>
                 <Input
                   type="number"
                   step="0.01"
                   min="0"
                   value={form.price}
-                  onChange={(e) =>
-                    setForm({ ...form, price: e.target.value })
-                  }
-                  placeholder="9.99"
+                  onChange={(e) => setForm({ ...form, price: e.target.value })}
+                  placeholder="10"
                 />
               </div>
             </div>
 
+            {/* Miniature + Vidéo — Option C */}
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-text mb-1">
-                  Miniature
-                </label>
-                {form.thumbnail && !thumbnailFile && (
-                  <div className="mb-2 flex items-center gap-2 text-xs">
-                    <ImageIcon className="w-3.5 h-3.5 text-green-600" />
-                    <span className="text-green-600 font-medium">Image actuelle</span>
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, thumbnail: "" })}
-                      className="text-red-400 hover:text-red-600 ml-auto"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+
+              {/* Card Miniature */}
+              <div className="rounded-xl border border-border overflow-hidden bg-card">
+                {/* Header */}
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-heading">Miniature</span>
+                    <span className="text-xs text-muted">(optionnelle)</span>
                   </div>
-                )}
-                {thumbnailFile && (
-                  <div className="mb-2 flex items-center gap-2 text-xs">
-                    <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
-                    <span className="text-blue-600 truncate">{thumbnailFile.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => setThumbnailFile(null)}
-                      className="text-red-400 hover:text-red-600 ml-auto"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer text-sm text-muted">
-                  <Upload className="w-4 h-4" />
-                  {thumbnailFile ? "Changer" : form.thumbnail ? "Remplacer" : "Choisir une image"}
+                  {(form.thumbnail || thumbnailFile) ? (
+                    <span className="text-xs text-green-600 font-medium">✓ {thumbnailFile ? "Nouveau" : "Actuelle"}</span>
+                  ) : (
+                    <span className="text-xs text-muted">Vide</span>
+                  )}
+                </div>
+
+                {/* Preview */}
+                <label className="block w-full aspect-video cursor-pointer">
+                  {thumbnailFile ? (
+                    <img
+                      src={URL.createObjectURL(thumbnailFile)}
+                      alt="Nouvelle miniature"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : form.thumbnail && thumbnailPreviewUrl ? (
+                    <img
+                      src={thumbnailPreviewUrl}
+                      alt="Miniature actuelle"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-primary/10 flex flex-col items-center justify-center gap-2 hover:bg-primary/20 transition-colors">
+                      <ImageIcon className="w-6 h-6 text-muted/50" />
+                      <span className="text-xs text-muted">Choisir une image</span>
+                    </div>
+                  )}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
@@ -803,70 +1005,151 @@ export default function AdminCoursPage() {
                     }}
                   />
                 </label>
+
+                {/* Footer actions */}
+                <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-card">
+                  <label className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-text py-1.5 rounded-lg border border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer">
+                    <Upload className="w-3 h-3" />
+                    {thumbnailFile ? "Changer" : form.thumbnail ? "Remplacer" : "Ajouter"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) setThumbnailFile(e.target.files[0]);
+                      }}
+                    />
+                  </label>
+                  {(form.thumbnail || thumbnailFile) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setThumbnailFile(null);
+                        setThumbnailPreviewUrl(null);
+                        setForm({ ...form, thumbnail: "" });
+                      }}
+                      className="flex items-center justify-center p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition-colors text-red-400 hover:text-red-600"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                {!form.thumbnail && !thumbnailFile && (
+                  <p className="text-xs text-muted px-3 pt-2 pb-1">
+                    Sans miniature, la 1ère frame de la vidéo sera utilisée.
+                  </p>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-text mb-1">
-                  Vidéo (MP4)
-                </label>
-                {form.videoUrl && !videoFile && (
-                  <div className="mb-2 flex items-center gap-2 text-xs">
-                    <Film className="w-3.5 h-3.5 text-green-600" />
-                    <span className="text-green-600 font-medium">Vidéo actuelle</span>
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, videoUrl: "" })}
-                      className="text-red-400 hover:text-red-600 ml-auto"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                {videoFile && (
-                  <div className="mb-2 flex items-center gap-2 text-xs">
-                    <Film className="w-3.5 h-3.5 text-blue-600" />
-                    <span className="text-blue-600 truncate">
-                      {videoFile.name} ({(videoFile.size / (1024 * 1024)).toFixed(1)} Mo)
+
+              {/* Card Vidéo */}
+              <div className="rounded-xl border border-border overflow-hidden bg-card">
+                {/* Header */}
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+                  <span className="text-xs font-semibold text-heading">Vidéo</span>
+                  {(form.videoUrl || videoFile) ? (
+                    <span className="text-xs text-green-600 font-medium">
+                      ✓ {videoFile ? "Nouveau" : "Actuelle"}{form.duration ? ` · ${form.duration} min` : ""}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setVideoFile(null)}
-                      className="text-red-400 hover:text-red-600 ml-auto"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-                <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer text-sm text-muted">
-                  <Upload className="w-4 h-4" />
-                  {videoFile ? "Changer" : form.videoUrl ? "Remplacer" : "Choisir un fichier MP4"}
+                  ) : (
+                    <span className="text-xs text-muted">Vide</span>
+                  )}
+                </div>
+
+                {/* Preview */}
+                <label className="block w-full aspect-video cursor-pointer">
+                  {videoFile ? (
+                    <div className="w-full h-full bg-heading/90 flex flex-col items-center justify-center gap-2 px-4">
+                      <Film className="w-6 h-6 text-white/60" />
+                      <span className="text-xs text-white/70 text-center truncate w-full">{videoFile.name}</span>
+                      {form.duration && (
+                        <span className="text-xs font-semibold text-white bg-white/10 px-3 py-0.5 rounded-full">{form.duration} min</span>
+                      )}
+                    </div>
+                  ) : form.videoUrl ? (
+                    <div className="w-full h-full bg-heading/90 flex flex-col items-center justify-center gap-2 px-4">
+                      <Film className="w-6 h-6 text-white/60" />
+                      <span className="text-xs text-white/50">Vidéo enregistrée</span>
+                      {form.duration && (
+                        <span className="text-xs font-semibold text-white bg-white/10 px-3 py-0.5 rounded-full">{form.duration} min</span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-full h-full bg-primary/10 flex flex-col items-center justify-center gap-2 hover:bg-primary/20 transition-colors">
+                      <Film className="w-6 h-6 text-muted/50" />
+                      <span className="text-xs text-muted">Choisir une vidéo</span>
+                    </div>
+                  )}
                   <input
                     type="file"
-                    accept="video/mp4"
+                    accept="video/mp4,video/quicktime,video/webm,video/x-msvideo,video/avi,video/x-matroska,.mp4,.mov,.webm,.avi,.mkv,.m4v"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        if (file.type !== "video/mp4") {
-                          setError("Seul le format MP4 est accepté pour les vidéos");
-                          return;
-                        }
                         setVideoFile(file);
+                        extractVideoMetadata(file).then(({ thumbnail, durationMin }) => {
+                          if (thumbnail && !thumbnailFile && !form.thumbnail) {
+                            setThumbnailFile(thumbnail);
+                          }
+                          if (durationMin > 0) {
+                            setForm((prev) => ({ ...prev, duration: String(durationMin) }));
+                          }
+                        });
                       }
                     }}
                   />
                 </label>
+
+                {/* Footer actions */}
+                <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-card">
+                  <label className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-text py-1.5 rounded-lg border border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer">
+                    <Upload className="w-3 h-3" />
+                    {videoFile ? "Changer" : form.videoUrl ? "Remplacer" : "Ajouter"}
+                    <input
+                      type="file"
+                      accept="video/mp4,video/quicktime,video/webm,video/x-msvideo,video/avi,video/x-matroska,.mp4,.mov,.webm,.avi,.mkv,.m4v"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setVideoFile(file);
+                          extractVideoMetadata(file).then(({ thumbnail, durationMin }) => {
+                            if (thumbnail && !thumbnailFile && !form.thumbnail) {
+                              setThumbnailFile(thumbnail);
+                            }
+                            if (durationMin > 0) {
+                              setForm((prev) => ({ ...prev, duration: String(durationMin) }));
+                            }
+                          });
+                        }
+                      }}
+                    />
+                  </label>
+                  {(form.videoUrl || videoFile) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVideoFile(null);
+                        setForm({ ...form, videoUrl: "", duration: "" });
+                      }}
+                      className="flex items-center justify-center p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition-colors text-red-400 hover:text-red-600"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
+
             </div>
 
+            {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-text mb-1">
-                Description
-              </label>
+              <label className="block text-sm font-medium text-text mb-1">Description</label>
               <textarea
                 value={form.description}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={4}
                 className="w-full px-4 py-2.5 rounded-xl bg-card border border-border text-text placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-button/30 resize-y"
                 placeholder="Description du cours..."
@@ -874,17 +1157,13 @@ export default function AdminCoursPage() {
               />
             </div>
 
+            {/* Checkboxes */}
             <div className="flex items-center gap-6">
               <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.includedInSubscription}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      includedInSubscription: e.target.checked,
-                    })
-                  }
+                  onChange={(e) => setForm({ ...form, includedInSubscription: e.target.checked })}
                   className="w-4 h-4 rounded accent-button"
                 />
                 Inclus dans l&apos;abonnement
@@ -893,9 +1172,7 @@ export default function AdminCoursPage() {
                 <input
                   type="checkbox"
                   checked={form.isPublished}
-                  onChange={(e) =>
-                    setForm({ ...form, isPublished: e.target.checked })
-                  }
+                  onChange={(e) => setForm({ ...form, isPublished: e.target.checked })}
                   className="w-4 h-4 rounded accent-button"
                 />
                 Publié
@@ -903,28 +1180,51 @@ export default function AdminCoursPage() {
             </div>
           </div>
 
-          <div className="flex gap-3 justify-end pt-4 border-t border-border">
-            {uploadProgress && (
-              <span className="text-sm text-button animate-pulse mr-auto">
-                {uploadProgress}
-              </span>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setShowModal(false)}
-            >
-              Annuler
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving
-                ? uploadProgress || "Enregistrement..."
-                : editingId
-                ? "Mettre à jour"
-                : "Créer le cours"}
-            </Button>
-          </div>
         </form>
+        </div>
+
+        {/* Bandeau "ne pas quitter" pendant upload/conversion */}
+        {saving && (
+          <div className="mt-3 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-700 font-medium text-center">
+            ⚠️ Traitement en cours — veuillez ne pas fermer cette fenêtre
+          </div>
+        )}
+
+        {/* Footer hors du scroll */}
+        <div className="flex gap-3 justify-end pt-4 mt-2 border-t border-border">
+          {(saving && uploadProgress) && (
+            <div className="mr-auto flex flex-col gap-1.5 justify-center flex-1 min-w-0">
+              <span className="text-sm text-button font-medium truncate">{uploadProgress}</span>
+              {uploadPercent !== null ? (
+                <div className="w-full bg-primary/20 rounded-full h-1.5">
+                  <div
+                    className="bg-button rounded-full h-1.5 transition-all duration-200"
+                    style={{ width: `${uploadPercent}%` }}
+                  />
+                </div>
+              ) : uploadProgress ? (
+                <div className="w-full bg-primary/20 rounded-full h-1.5 overflow-hidden">
+                  <div className="h-1.5 bg-button rounded-full animate-[progress-indeterminate_1.4s_ease-in-out_infinite] w-1/3" />
+                </div>
+              ) : null}
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setShowModal(false)}
+            disabled={saving}
+          >
+            Annuler
+          </Button>
+          <Button type="submit" form="course-form" disabled={saving}>
+            {saving
+              ? "Traitement…"
+              : editingId
+              ? "Mettre à jour"
+              : "Créer le cours"}
+          </Button>
+        </div>
       </Modal>
     </div>
   );

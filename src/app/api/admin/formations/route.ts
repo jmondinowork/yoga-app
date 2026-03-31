@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod/v4';
+import { generateThumbnailFromVideo } from '@/lib/thumbnail';
 
 const videoSchema = z.object({
   title: z.string().min(3, 'Le titre doit contenir au moins 3 caractères'),
@@ -120,6 +121,22 @@ export async function POST(req: NextRequest) {
         videos: { orderBy: { sortOrder: 'asc' } },
       },
     });
+
+    // Auto-generate thumbnail from first video if no thumbnail provided
+    if (!data.thumbnail && formation.videos.length > 0) {
+      const firstVideo = formation.videos[0];
+      if (firstVideo.videoUrl) {
+        const videoKey = firstVideo.videoUrl.includes("/")
+          ? firstVideo.videoUrl
+          : `formations/${data.slug}/videos/${firstVideo.videoUrl}`;
+        const thumbKey = `formations/${data.slug}/thumbnail.jpg`;
+        generateThumbnailFromVideo(videoKey, thumbKey).then(async (key) => {
+          if (key) {
+            await prisma.formation.update({ where: { id: formation.id }, data: { thumbnail: key } });
+          }
+        }).catch((err) => console.error('[AUTO_THUMBNAIL_ERROR]', err));
+      }
+    }
 
     return NextResponse.json(formation, { status: 201 });
   } catch (error) {

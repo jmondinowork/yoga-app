@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Clock, BarChart3, Lock } from "lucide-react";
+import { Clock, Lock } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import ProgressBar from "@/components/ui/ProgressBar";
 
@@ -8,7 +8,6 @@ interface CourseCardProps {
   title: string;
   thumbnail?: string | null;
   duration: number;
-  level: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
   theme: string;
   price?: number | null;
   includedInSubscription?: boolean;
@@ -16,24 +15,11 @@ interface CourseCardProps {
   progress?: number;
 }
 
-const levelLabels = {
-  BEGINNER: "Débutant",
-  INTERMEDIATE: "Intermédiaire",
-  ADVANCED: "Avancé",
-};
-
-const levelColors = {
-  BEGINNER: "success" as const,
-  INTERMEDIATE: "warning" as const,
-  ADVANCED: "premium" as const,
-};
-
 export default function CourseCard({
   slug,
   title,
   thumbnail,
   duration,
-  level,
   theme,
   price,
   includedInSubscription = true,
@@ -70,20 +56,11 @@ export default function CourseCard({
             {duration} min
           </div>
 
-          {/* Price badge */}
-          <div className="absolute top-2 left-2">
-            {price ? (
-              <Badge variant="premium">{price} €</Badge>
-            ) : includedInSubscription ? (
-              <Badge variant="premium">Abonnement</Badge>
-            ) : null}
-          </div>
         </div>
 
         {/* Content */}
         <div className="p-4 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant={levelColors[level]}>{levelLabels[level]}</Badge>
             <Badge>{theme}</Badge>
           </div>
 

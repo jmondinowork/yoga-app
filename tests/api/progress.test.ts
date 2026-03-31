@@ -6,6 +6,12 @@ import { NextRequest } from 'next/server';
 import '../mocks/prisma';
 import '../mocks/auth';
 
+// Mock access helper
+vi.mock('@/lib/helpers/access', () => ({
+  canAccessCourse: vi.fn().mockResolvedValue(true),
+  canAccessFormation: vi.fn().mockResolvedValue(true),
+}));
+
 function createRequest(url: string, init?: RequestInit) {
   return new NextRequest(new URL(url, 'http://localhost:3000'), init);
 }

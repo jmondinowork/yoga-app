@@ -1,16 +1,8 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { auth } from "@/lib/auth";
 import Navbar from "@/components/layout/Navbar";
-import { User, Settings, BookOpen, LayoutDashboard, Play, ShoppingBag } from "lucide-react";
-
-const dashboardLinks = [
-  { href: "/mon-espace", label: "Tableau de bord", icon: LayoutDashboard },
-  { href: "/mon-espace/formations", label: "Formations", icon: BookOpen },
-  { href: "/mon-espace/cours", label: "Cours vidéo", icon: Play },
-  { href: "/mon-espace/mes-achats", label: "Mes achats", icon: ShoppingBag },
-  { href: "/mon-espace/parametres", label: "Paramètres", icon: Settings },
-];
+import DashboardNav from "@/components/dashboard/DashboardNav";
+import { User } from "lucide-react";
 
 export default async function DashboardLayout({
   children,
@@ -21,6 +13,10 @@ export default async function DashboardLayout({
 
   if (!session?.user) {
     redirect("/connexion");
+  }
+
+  if (session.user.role === "ADMIN") {
+    redirect("/admin");
   }
 
   return (
@@ -60,21 +56,7 @@ export default async function DashboardLayout({
               </div>
 
               {/* Navigation */}
-              <nav className="space-y-1">
-                {dashboardLinks.map((link) => {
-                  const Icon = link.icon;
-                  return (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-text hover:bg-primary/40 hover:text-heading transition-colors"
-                    >
-                      <Icon className="w-4 h-4" />
-                      {link.label}
-                    </Link>
-                  );
-                })}
-              </nav>
+              <DashboardNav />
             </div>
           </aside>
 

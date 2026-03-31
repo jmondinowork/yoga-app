@@ -1,8 +1,12 @@
 import Stripe from "stripe";
 
-// Mode simulation : actif quand la clé Stripe n'est pas configurée
-export const SIMULATE_PAYMENTS =
-  !process.env.STRIPE_SECRET_KEY || process.env.SIMULATE_PAYMENTS === "true";
+// Mode démo : actif quand STRIPE_DEMO=true (simuler les paiements sans appeler Stripe)
+export const SIMULATE_PAYMENTS = process.env.STRIPE_DEMO === "true";
+
+// Sécurité : interdire le mode simulation en production
+if (SIMULATE_PAYMENTS && process.env.NODE_ENV === "production") {
+  throw new Error("STRIPE_DEMO=true est interdit en production. Configurer les clés Stripe réelles.");
+}
 
 let _stripe: Stripe | null = null;
 
@@ -30,7 +34,7 @@ export const PLANS = [
   {
     id: "monthly",
     name: "Mensuel",
-    price: 19.99,
+    price: 22,
     priceId: process.env.STRIPE_MONTHLY_PRICE_ID || "",
     interval: "month" as const,
     description: "Accès illimité à tous les cours",
@@ -44,10 +48,10 @@ export const PLANS = [
   {
     id: "annual",
     name: "Annuel",
-    price: 14.99,
+    price: 200,
     priceId: process.env.STRIPE_ANNUAL_PRICE_ID || "",
     interval: "year" as const,
-    description: "Le meilleur tarif — économisez 25%",
+    description: "Le meilleur tarif",
     features: [
       "Tout le plan mensuel",
       "Économisez 25%",

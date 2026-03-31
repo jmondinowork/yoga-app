@@ -44,12 +44,12 @@ describe('Navbar', () => {
 
   it('n\'affiche pas le bouton Admin pour un USER', () => {
     render(<Navbar user={{ name: 'John', email: 'john@test.com', role: 'USER' }} />);
-    expect(screen.queryByText('Admin')).not.toBeInTheDocument();
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument();
   });
 
-  it('affiche le bouton Admin pour un ADMIN', () => {
+  it('affiche le bouton Administration pour un ADMIN', () => {
     render(<Navbar user={{ name: 'Admin', email: 'admin@test.com', role: 'ADMIN' }} />);
-    expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.getAllByText('Administration').length).toBeGreaterThanOrEqual(1);
   });
 
   it('ne montre pas "Se connecter" quand user connecté', () => {

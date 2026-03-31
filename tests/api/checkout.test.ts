@@ -10,11 +10,17 @@ import '../mocks/auth';
 vi.mock('@/lib/stripe', () => ({
   SIMULATE_PAYMENTS: true,
   PLANS: [
-    { id: 'monthly', name: 'Mensuel', price: 19.99, priceId: '', interval: 'month' },
-    { id: 'annual', name: 'Annuel', price: 14.99, priceId: '', interval: 'year', badge: 'Meilleure offre' },
+    { id: 'monthly', name: 'Mensuel', price: 22, priceId: '', interval: 'month' },
+    { id: 'annual', name: 'Annuel', price: 200, priceId: '', interval: 'year', badge: 'Meilleure offre' },
   ],
   getStripe: vi.fn(),
   stripe: {},
+}));
+
+// Mock rate limit to always allow
+vi.mock('@/lib/rate-limit', () => ({
+  rateLimit: vi.fn(() => ({ allowed: true, remaining: 9, resetAt: Date.now() + 900000 })),
+  rateLimitResponse: vi.fn(),
 }));
 
 function createRequest(body: Record<string, unknown>) {
@@ -98,7 +104,7 @@ describe('POST /api/stripe/checkout (simulation)', () => {
   });
 
   describe('Achat de cours', () => {
-    it('crée un achat de cours simulé', async () => {
+    it('crée un achat de cours simulé avec location 72h', async () => {
       prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1' });
       prismaMock.course.findUnique.mockResolvedValue({ id: 'c-1', slug: 'yoga', price: 29.99 });
       prismaMock.purchase.findFirst.mockResolvedValue(null);
@@ -112,12 +118,20 @@ describe('POST /api/stripe/checkout (simulation)', () => {
       expect(json.url).toContain('/cours/yoga');
       expect(prismaMock.purchase.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ courseId: 'c-1', amount: 29.99 }),
+          data: expect.objectContaining({
+            courseId: 'c-1',
+            amount: 29.99,
+          }),
         })
       );
+      // Vérifier que expiresAt est dans ~72h
+      const callArgs = prismaMock.purchase.create.mock.calls[0][0].data;
+      expect(callArgs.expiresAt).toBeInstanceOf(Date);
+      const hoursFromNow = (callArgs.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60);
+      expect(hoursFromNow).toBeCloseTo(72, 0);
     });
 
-    it('rejette si cours déjà acheté', async () => {
+    it('rejette si location active existante', async () => {
       prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1' });
       prismaMock.course.findUnique.mockResolvedValue({ id: 'c-1', slug: 'yoga', price: 29.99 });
       prismaMock.purchase.findFirst.mockResolvedValue({ id: 'existing' });
@@ -138,7 +152,7 @@ describe('POST /api/stripe/checkout (simulation)', () => {
   });
 
   describe('Achat de formation', () => {
-    it('crée un achat de formation simulé', async () => {
+    it('crée un achat de formation simulé (accès permanent)', async () => {
       prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1' });
       prismaMock.formation.findUnique.mockResolvedValue({ id: 'f-1', slug: 'prenatal', price: 49.99 });
       prismaMock.purchase.findFirst.mockResolvedValue(null);
@@ -150,6 +164,28 @@ describe('POST /api/stripe/checkout (simulation)', () => {
 
       expect(res.status).toBe(200);
       expect(json.url).toContain('/formations/prenatal');
+      // Formation : pas d'expiresAt (accès permanent)
+      const callArgs = prismaMock.purchase.create.mock.calls[0][0].data;
+      expect(callArgs.expiresAt).toBeUndefined();
+    });
+
+    it('rejette si formation déjà achetée', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1' });
+      prismaMock.formation.findUnique.mockResolvedValue({ id: 'f-1', slug: 'prenatal', price: 49.99 });
+      prismaMock.purchase.findFirst.mockResolvedValue({ id: 'existing' });
+
+      const { POST } = await import('@/app/api/stripe/checkout/route');
+      const res = await POST(createRequest({ type: 'formation', courseId: 'f-1' }));
+      expect(res.status).toBe(400);
+    });
+
+    it('retourne 404 si formation introuvable', async () => {
+      prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1' });
+      prismaMock.formation.findUnique.mockResolvedValue(null);
+
+      const { POST } = await import('@/app/api/stripe/checkout/route');
+      const res = await POST(createRequest({ type: 'formation', courseId: 'nonexistent' }));
+      expect(res.status).toBe(404);
     });
   });
 
