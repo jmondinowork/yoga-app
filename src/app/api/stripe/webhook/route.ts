@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import { stripe } from '@/lib/stripe';
+import { stripe, SIMULATE_PAYMENTS } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 // Helper: récupérer les dates de période depuis les items d'un abonnement
 async function getSubscriptionPeriod(subscriptionId: string) {
@@ -21,6 +21,14 @@ async function getSubscriptionPeriod(subscriptionId: string) {
 }
 
 export async function POST(req: NextRequest) {
+  if (SIMULATE_PAYMENTS) {
+    return NextResponse.json({ error: 'Webhooks désactivés en mode simulation.' }, { status: 400 });
+  }
+
+  if (!webhookSecret) {
+    return NextResponse.json({ error: 'STRIPE_WEBHOOK_SECRET non configuré.' }, { status: 500 });
+  }
+
   const body = await req.text();
   const headersList = await headers();
   const signature = headersList.get('stripe-signature');

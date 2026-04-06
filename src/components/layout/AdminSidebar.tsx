@@ -12,6 +12,7 @@ import {
   Settings,
   ArrowLeft,
   CalendarDays,
+  Blocks,
 } from "lucide-react";
 
 const adminLinks = [
@@ -22,6 +23,7 @@ const adminLinks = [
   { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users },
   { href: "/admin/abonnements", label: "Revenus", icon: CreditCard },
   { href: "/admin/contenu", label: "Contenu", icon: FileText },
+  { href: "/admin/services", label: "Services", icon: Blocks },
   { href: "/admin/parametres", label: "Paramètres", icon: Settings },
 ];
 

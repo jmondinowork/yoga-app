@@ -6,15 +6,14 @@ export const SIMULATE_PAYMENTS = process.env.STRIPE_DEMO === "true";
 let _stripe: Stripe | null = null;
 
 export function getStripe(): Stripe {
-  // Sécurité : interdire le mode simulation en production (vérifié au runtime, pas au build)
-  if (SIMULATE_PAYMENTS && process.env.NODE_ENV === "production") {
-    throw new Error("STRIPE_DEMO=true est interdit en production. Configurer les clés Stripe réelles.");
-  }
   if (SIMULATE_PAYMENTS) {
-    throw new Error("Stripe n'est pas configuré. Mode simulation actif.");
+    throw new Error("Stripe n'est pas configuré. Mode simulation actif (STRIPE_DEMO=true).");
+  }
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY manquante. Configurez la variable d'environnement ou activez STRIPE_DEMO=true.");
   }
   if (!_stripe) {
-    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
       apiVersion: "2026-01-28.clover",
       typescript: true,
     });
