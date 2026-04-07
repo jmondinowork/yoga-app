@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import dynamic from "next/dynamic";
 import {
   ArrowRight,
   Play,
@@ -15,10 +16,13 @@ import {
 import Button from "@/components/ui/Button";
 import { Accordion } from "@/components/ui/index";
 import CourseCard from "@/components/courses/CourseCard";
-import TarifsClient from "@/components/pricing/TarifsClient";
 import TestimonialCarousel from "@/components/home/TestimonialCarousel";
 import { getContents, getContent } from "@/lib/content";
 import { prisma } from "@/lib/prisma";
+
+const TarifsClient = dynamic(() => import("@/components/pricing/TarifsClient"), {
+  loading: () => <div className="h-96 animate-pulse bg-primary/10 rounded-2xl" />,
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const c = await getContents([
@@ -43,6 +47,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 import { getPresignedUrl } from "@/lib/r2";
+
+// Revalidate homepage every 60 seconds (ISR)
+export const revalidate = 60;
 
 const defaultFaqItems = [
   {
@@ -73,57 +80,63 @@ const defaultFaqItems = [
 ];
 
 export default async function HomePage() {
-  const c = await getContents([
-    "homepage_hero_badge",
-    "homepage_hero_title",
-    "homepage_hero_subtitle",
-    "homepage_about_label",
-    "homepage_about_heading",
-    "homepage_about_text",
-    "homepage_about_stat_1",
-    "homepage_about_stat_2",
-    "homepage_about_stat_3",
-    "homepage_how_label",
-    "homepage_how_heading",
-    "homepage_how_step_1_title",
-    "homepage_how_step_1_desc",
-    "homepage_how_step_2_title",
-    "homepage_how_step_2_desc",
-    "homepage_how_step_3_title",
-    "homepage_how_step_3_desc",
-    "homepage_cta_heading",
-    "homepage_cta_subtitle",
-    "homepage_calendar_heading",
-    "homepage_calendar_subtitle",
+  // Parallelize ALL independent DB queries
+  const [c, upcomingEvents, dbTestimonials, faqRaw, dbCourses, themeGroups] = await Promise.all([
+    getContents([
+      "homepage_hero_badge",
+      "homepage_hero_title",
+      "homepage_hero_subtitle",
+      "homepage_about_label",
+      "homepage_about_heading",
+      "homepage_about_text",
+      "homepage_about_stat_1",
+      "homepage_about_stat_2",
+      "homepage_about_stat_3",
+      "homepage_how_label",
+      "homepage_how_heading",
+      "homepage_how_step_1_title",
+      "homepage_how_step_1_desc",
+      "homepage_how_step_2_title",
+      "homepage_how_step_2_desc",
+      "homepage_how_step_3_title",
+      "homepage_how_step_3_desc",
+      "homepage_cta_heading",
+      "homepage_cta_subtitle",
+      "homepage_calendar_heading",
+      "homepage_calendar_subtitle",
+    ]),
+    prisma.liveEvent.findMany({
+      where: { isPublished: true, startTime: { gte: new Date() } },
+      orderBy: { startTime: "asc" },
+      take: 3,
+      include: { _count: { select: { registrations: true } } },
+    }),
+    prisma.testimonial.findMany({
+      where: { isVisible: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    getContent("faq_homepage", "[]"),
+    prisma.course.findMany({
+      where: { isPublished: true },
+      orderBy: { sortOrder: "asc" },
+      take: 6,
+      select: {
+        slug: true, title: true, thumbnail: true,
+        duration: true, theme: true, price: true, includedInSubscription: true,
+      },
+    }),
+    // Use groupBy instead of fetching all courses just to count themes
+    prisma.course.groupBy({
+      by: ["theme"],
+      where: { isPublished: true },
+      _count: { _all: true },
+    }),
   ]);
 
-  // Fetch upcoming live events (next 3)
-  const upcomingEvents = await prisma.liveEvent.findMany({
-    where: {
-      isPublished: true,
-      startTime: { gte: new Date() },
-    },
-    orderBy: { startTime: "asc" },
-    take: 3,
-    include: {
-      _count: { select: { registrations: true } },
-    },
-  });
-
-  // Fetch testimonials from DB
-  const dbTestimonials = await prisma.testimonial.findMany({
-    where: { isVisible: true },
-    orderBy: { createdAt: "desc" },
-  });
   const testimonials = dbTestimonials.map((t) => ({
-    id: t.id,
-    name: t.name,
-    content: t.content,
-    rating: t.rating,
+    id: t.id, name: t.name, content: t.content, rating: t.rating,
   }));
 
-  // Fetch FAQ from DB
-  const faqRaw = await getContent("faq_homepage", "[]");
   let faqItems: { question: string; answer: string }[];
   try {
     const parsed = JSON.parse(faqRaw);
@@ -132,21 +145,6 @@ export default async function HomePage() {
     faqItems = defaultFaqItems;
   }
 
-  // Fetch featured courses from DB (6 latest published)
-  const dbCourses = await prisma.course.findMany({
-    where: { isPublished: true },
-    orderBy: { sortOrder: "asc" },
-    take: 6,
-    select: {
-      slug: true,
-      title: true,
-      thumbnail: true,
-      duration: true,
-      theme: true,
-      price: true,
-      includedInSubscription: true,
-    },
-  });
   const featuredCourses = await Promise.all(
     dbCourses.map(async (course) => ({
       ...course,
@@ -158,14 +156,9 @@ export default async function HomePage() {
     }))
   );
 
-  // Fetch themes dynamically from published courses (with count)
-  const allCourses = await prisma.course.findMany({
-    where: { isPublished: true },
-    select: { theme: true },
-  });
   const themeCounts: Record<string, number> = {};
-  for (const course of allCourses) {
-    themeCounts[course.theme] = (themeCounts[course.theme] || 0) + 1;
+  for (const group of themeGroups) {
+    themeCounts[group.theme] = group._count._all;
   }
   const themeEmojis: Record<string, string> = {
     Vinyasa: "🔥", Hatha: "🌿", "Yin Yoga": "🌙", Méditation: "🧘",

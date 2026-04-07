@@ -11,7 +11,7 @@ async function checkAdmin() {
   return session;
 }
 
-// GET - Liste des utilisateurs
+// GET - Liste des utilisateurs (paginé)
 export async function GET(req: NextRequest) {
   const session = await checkAdmin();
   if (!session) {
@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") || "";
   const filter = searchParams.get("filter") || "";
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = parseInt(searchParams.get("limit") || "50");
 
   const where: Record<string, unknown> = {};
 
@@ -37,30 +39,39 @@ export async function GET(req: NextRequest) {
     where.subscription = null;
   }
 
-  const users = await prisma.user.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      createdAt: true,
-      subscription: {
-        select: {
-          plan: true,
-          status: true,
-          cancelAtPeriodEnd: true,
-          currentPeriodEnd: true,
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        createdAt: true,
+        subscription: {
+          select: {
+            plan: true,
+            status: true,
+            cancelAtPeriodEnd: true,
+            currentPeriodEnd: true,
+          },
+        },
+        _count: {
+          select: { purchases: true },
         },
       },
-      _count: {
-        select: { purchases: true },
-      },
-    },
-  });
+    }),
+    prisma.user.count({ where }),
+  ]);
 
-  return NextResponse.json({ users, total: users.length });
+  return NextResponse.json({
+    users,
+    total,
+    pagination: { page, limit, totalPages: Math.ceil(total / limit) },
+  });
 }
 
 // PATCH - Modifier le rôle d'un utilisateur

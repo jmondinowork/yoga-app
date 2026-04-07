@@ -1,15 +1,21 @@
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import { auth } from "@/lib/auth";
 import Navbar from "@/components/layout/Navbar";
 import DashboardNav from "@/components/dashboard/DashboardNav";
 import { User } from "lucide-react";
+import { getContent } from "@/lib/content";
+import { getPresignedUrl } from "@/lib/r2";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const [session, logoKey] = await Promise.all([
+    auth(),
+    getContent("site_logo"),
+  ]);
 
   if (!session?.user) {
     redirect("/connexion");
@@ -19,9 +25,12 @@ export default async function DashboardLayout({
     redirect("/admin");
   }
 
+  const logoUrl = logoKey ? await getPresignedUrl(logoKey, 3600) : null;
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar
+        logoUrl={logoUrl}
         user={{
           name: session.user.name,
           email: session.user.email,
@@ -38,10 +47,12 @@ export default async function DashboardLayout({
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
                   {session.user.image ? (
-                    <img
+                    <Image
                       src={session.user.image}
                       alt=""
-                      className="w-12 h-12 rounded-full object-cover"
+                      width={48}
+                      height={48}
+                      className="rounded-full object-cover"
                     />
                   ) : (
                     <User className="w-6 h-6 text-muted" />

@@ -3,6 +3,8 @@ import TarifsClient from "@/components/pricing/TarifsClient";
 import Accordion from "@/components/ui/Accordion";
 import { getContents, getContent } from "@/lib/content";
 
+export const revalidate = 120;
+
 const defaultPricingFaq = [
   {
     question: "Quelle est la différence entre les cours et les formations ?",

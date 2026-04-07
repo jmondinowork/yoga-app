@@ -1,16 +1,26 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
+import dynamic from "next/dynamic";
 import { Clock, Tag, ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
-import VideoPlayer from "@/components/courses/VideoPlayer";
 import CourseCard from "@/components/courses/CourseCard";
 import PurchaseButton from "@/components/courses/PurchaseButton";
+
+const VideoPlayer = dynamic(() => import("@/components/courses/VideoPlayer"), {
+  ssr: false,
+  loading: () => (
+    <div className="aspect-video bg-primary/30 rounded-2xl animate-pulse" />
+  ),
+});
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { canAccessCourse, getCourseRentalExpiry, hasActiveSubscription } from "@/lib/helpers/access";
 import { getPresignedUrl } from "@/lib/r2";
+
+export const revalidate = 60;
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -34,74 +44,54 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function CourseDetailPage({ params }: Props) {
   const { slug } = await params;
 
-  const course = await prisma.course.findUnique({
-    where: { slug, isPublished: true },
-  });
+  // Fetch course and session in parallel
+  const [course, session] = await Promise.all([
+    prisma.course.findUnique({ where: { slug, isPublished: true } }),
+    auth(),
+  ]);
 
   if (!course) notFound();
 
-  const session = await auth();
+  // Parallel: access check, progress, related courses, thumbnail
+  const userId = session?.user?.id;
+  const [accessResult, vp, relatedCourses, thumbnailUrl] = await Promise.all([
+    userId
+      ? canAccessCourse(userId, course.id).then(async (hasAccess) => {
+          if (!hasAccess) return { hasAccess: false, isSubscriber: false, rentalExpiry: null };
+          const [isSubscriber, rentalExpiry] = await Promise.all([
+            hasActiveSubscription(userId),
+            getCourseRentalExpiry(userId, course.id),
+          ]);
+          return { hasAccess, isSubscriber, rentalExpiry };
+        })
+      : Promise.resolve({ hasAccess: false, isSubscriber: false, rentalExpiry: null as Date | null }),
+    userId
+      ? prisma.videoProgress.findUnique({
+          where: { userId_courseId: { userId, courseId: course.id } },
+        })
+      : null,
+    prisma.course.findMany({
+      where: { isPublished: true, theme: course.theme, id: { not: course.id } },
+      take: 3,
+      orderBy: { sortOrder: "asc" },
+    }),
+    course.thumbnail && !course.thumbnail.startsWith("http")
+      ? getPresignedUrl(course.thumbnail, 7200).catch(() => null)
+      : Promise.resolve(course.thumbnail),
+  ]);
 
-  // Vérifier l'accès
-  let hasAccess = false;
-  let rentalExpiry: Date | null = null;
-  let isSubscriber = false;
-  let hoursLeft = 0;
-  if (session?.user?.id) {
-    hasAccess = await canAccessCourse(session.user.id, course.id);
-    if (hasAccess) {
-      isSubscriber = await hasActiveSubscription(session.user.id);
-      if (!isSubscriber) {
-        rentalExpiry = await getCourseRentalExpiry(session.user.id, course.id);
-        if (rentalExpiry) {
-          hoursLeft = Math.max(0, Math.ceil((rentalExpiry.getTime() - Date.now()) / (1000 * 60 * 60)));
-        }
-      }
-    }
-  }
+  const { hasAccess, isSubscriber, rentalExpiry } = accessResult;
+  const progress = vp?.progress ?? 0;
+  const hoursLeft = rentalExpiry
+    ? Math.max(0, Math.ceil((rentalExpiry.getTime() - Date.now()) / (1000 * 60 * 60)))
+    : 0;
 
-  // Progrès vidéo
-  let progress = 0;
-  if (session?.user?.id) {
-    const vp = await prisma.videoProgress.findUnique({
-      where: { userId_courseId: { userId: session.user.id, courseId: course.id } },
-    });
-    if (vp) progress = vp.progress;
-  }
-
-  // Cours similaires (même thème, hors cours actuel)
-  const relatedCourses = await prisma.course.findMany({
-    where: {
-      isPublished: true,
-      theme: course.theme,
-      id: { not: course.id },
-    },
-    take: 3,
-    orderBy: { sortOrder: "asc" },
-  });
-
-  // Presigned URL pour la thumbnail
-  let thumbnailUrl: string | null = null;
-  if (course.thumbnail && !course.thumbnail.startsWith("http")) {
-    try {
-      thumbnailUrl = await getPresignedUrl(course.thumbnail, 7200);
-    } catch {
-      thumbnailUrl = null;
-    }
-  } else {
-    thumbnailUrl = course.thumbnail;
-  }
-
-  // Presigned URLs pour les thumbnails des cours similaires
+  // Presigned URLs for related courses (already parallel)
   const relatedCoursesWithThumbnails = await Promise.all(
     relatedCourses.map(async (c) => {
       if (c.thumbnail && !c.thumbnail.startsWith("http")) {
-        try {
-          const url = await getPresignedUrl(c.thumbnail, 7200);
-          return { ...c, thumbnail: url };
-        } catch {
-          return { ...c, thumbnail: null };
-        }
+        const url = await getPresignedUrl(c.thumbnail, 7200).catch(() => null);
+        return { ...c, thumbnail: url };
       }
       return c;
     })
@@ -186,12 +176,14 @@ export default async function CourseDetailPage({ params }: Props) {
         <div className="space-y-6">
           <div className="bg-card rounded-2xl border border-border p-6 space-y-6 sticky top-24">
             {/* Thumbnail */}
-            <div className="aspect-video bg-gradient-to-br from-button/10 to-primary/40 rounded-xl flex items-center justify-center overflow-hidden">
+            <div className="relative aspect-video bg-gradient-to-br from-button/10 to-primary/40 rounded-xl flex items-center justify-center overflow-hidden">
               {thumbnailUrl ? (
-                <img
+                <Image
                   src={thumbnailUrl}
                   alt={course.title}
-                  className="w-full h-full object-cover"
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 33vw"
+                  className="object-cover"
                 />
               ) : (
                 <span className="text-5xl opacity-30">🧘</span>

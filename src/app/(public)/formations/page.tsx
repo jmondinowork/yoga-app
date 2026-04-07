@@ -4,6 +4,8 @@ import { getPresignedUrl } from "@/lib/r2";
 import { getContents } from "@/lib/content";
 import FormationsPageClient from "./FormationsPageClient";
 
+export const revalidate = 60;
+
 export async function generateMetadata(): Promise<Metadata> {
   const c = await getContents(["seo_formations_title", "seo_formations_description", "seo_formations_keywords", "seo_formations_og_title", "seo_formations_og_description"]);
   const title = c["seo_formations_title"] ?? "Formations";

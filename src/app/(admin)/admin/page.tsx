@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Users, CreditCard, Video, TrendingUp, Eye, DollarSign, BookOpen, UserPlus, ShoppingBag, BarChart3, Clock } from "lucide-react";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import Stripe from "stripe";
 import { SIMULATE_PAYMENTS, getStripe } from "@/lib/stripe";
 
 export const metadata: Metadata = {
@@ -47,13 +48,15 @@ export default async function AdminDashboardPage() {
     courseRentalRevenueThisMonthAgg,
     recentUsers,
     recentPurchases,
+    formationPurchases12m,
+    coursePurchases12m,
   ] = await Promise.all([
     prisma.user.count({ where: { role: Role.USER } }),
     prisma.user.count({ where: { role: Role.USER, createdAt: { gte: startOfMonth } } }),
-    prisma.subscription.count({ where: { status: "ACTIVE" } }),
-    prisma.subscription.count({ where: { createdAt: { gte: startOfMonth } } }),
-    prisma.subscription.count({ where: { status: "ACTIVE", plan: "MONTHLY" } }),
-    prisma.subscription.count({ where: { status: "ACTIVE", plan: "ANNUAL" } }),
+    prisma.subscription.count({ where: { status: "ACTIVE", user: { role: Role.USER } } }),
+    prisma.subscription.count({ where: { createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
+    prisma.subscription.count({ where: { status: "ACTIVE", plan: "MONTHLY", user: { role: Role.USER } } }),
+    prisma.subscription.count({ where: { status: "ACTIVE", plan: "ANNUAL", user: { role: Role.USER } } }),
     prisma.course.count({ where: { isPublished: true } }),
     prisma.formation.count({ where: { isPublished: true } }),
     prisma.course.findMany({
@@ -76,8 +79,8 @@ export default async function AdminDashboardPage() {
       },
     }),
     prisma.videoProgress.aggregate({ _avg: { progress: true } }),
-    prisma.purchase.count({ where: { courseId: { not: null }, expiresAt: { gt: now } } }),
-    prisma.purchase.count({ where: { formationId: { not: null }, createdAt: { gte: startOfMonth } } }),
+    prisma.purchase.count({ where: { courseId: { not: null }, expiresAt: { gt: now }, user: { role: Role.USER } } }),
+    prisma.purchase.count({ where: { formationId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
     // Durée totale du contenu (en minutes)
     prisma.course.aggregate({ _sum: { duration: true }, where: { isPublished: true } }),
     // Utilisateurs actifs (7 derniers jours)
@@ -87,12 +90,12 @@ export default async function AdminDashboardPage() {
       distinct: ["userId"],
     }),
     // Panier moyen
-    prisma.purchase.aggregate({ _avg: { amount: true }, _count: true }),
+    prisma.purchase.aggregate({ _avg: { amount: true }, _count: true, where: { user: { role: Role.USER } } }),
     // Revenue formations ce mois
-    prisma.purchase.aggregate({ _sum: { amount: true }, where: { formationId: { not: null }, createdAt: { gte: startOfMonth } } }),
+    prisma.purchase.aggregate({ _sum: { amount: true }, where: { formationId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
     // Locations cours ce mois
-    prisma.purchase.count({ where: { courseId: { not: null }, createdAt: { gte: startOfMonth } } }),
-    prisma.purchase.aggregate({ _sum: { amount: true }, where: { courseId: { not: null }, createdAt: { gte: startOfMonth } } }),
+    prisma.purchase.count({ where: { courseId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
+    prisma.purchase.aggregate({ _sum: { amount: true }, where: { courseId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
     prisma.user.findMany({
       where: { role: Role.USER },
       orderBy: { createdAt: "desc" },
@@ -112,6 +115,16 @@ export default async function AdminDashboardPage() {
         course: { select: { title: true } },
         formation: { select: { title: true } },
       },
+    }),
+    // Achats formations sur 12 mois (pour ventilation revenus)
+    prisma.purchase.findMany({
+      where: { formationId: { not: null }, createdAt: { gte: twelveMonthsAgo }, user: { role: Role.USER } },
+      select: { amount: true, createdAt: true },
+    }),
+    // Locations cours sur 12 mois (pour ventilation revenus)
+    prisma.purchase.findMany({
+      where: { courseId: { not: null }, createdAt: { gte: twelveMonthsAgo }, user: { role: Role.USER } },
+      select: { amount: true, createdAt: true },
     }),
   ]);
 
@@ -190,38 +203,108 @@ export default async function AdminDashboardPage() {
   let revenueThisMonth = 0;
 
   if (!SIMULATE_PAYMENTS) {
-    // Données réelles depuis Stripe
+    // Données réelles depuis Stripe — pagination complète
     const stripeClient = getStripe();
-    const charges = await stripeClient.charges.list({
-      created: { gte: Math.floor(twelveMonthsAgo.getTime() / 1000) },
-      limit: 100,
-    });
-    for (const charge of charges.data) {
-      if (charge.status !== "succeeded") continue;
-      const d = new Date(charge.created * 1000);
-      const key = `${d.getFullYear()}-${d.getMonth()}`;
-      const amount = charge.amount / 100; // centimes → euros
-      if (key in revenueByMonth) revenueByMonth[key] += amount;
-      if (d >= startOfMonth) revenueThisMonth += amount;
+    const createdGte = Math.floor(twelveMonthsAgo.getTime() / 1000);
+    let hasMore = true;
+    let startingAfter: string | undefined;
+
+    while (hasMore) {
+      const params: Stripe.ChargeListParams = {
+        created: { gte: createdGte },
+        limit: 100,
+      };
+      if (startingAfter) params.starting_after = startingAfter;
+
+      const batch = await stripeClient.charges.list(params);
+      for (const charge of batch.data) {
+        if (charge.status !== "succeeded") continue;
+        const net = (charge.amount - (charge.amount_refunded ?? 0)) / 100;
+        if (net <= 0) continue;
+        const d = new Date(charge.created * 1000);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (key in revenueByMonth) revenueByMonth[key] += net;
+        if (d >= startOfMonth) revenueThisMonth += net;
+      }
+      hasMore = batch.has_more;
+      if (batch.data.length > 0) {
+        startingAfter = batch.data[batch.data.length - 1].id;
+      }
     }
   } else {
-    // Mode simulation : lecture de la table Purchase locale
-    const [revenueAgg, localPurchases] = await Promise.all([
+    // Mode simulation : lecture des tables Purchase + Subscription
+    const [purchaseRevenueAgg, localPurchases, localSubscriptions] = await Promise.all([
       prisma.purchase.aggregate({ _sum: { amount: true }, where: { createdAt: { gte: startOfMonth } } }),
       prisma.purchase.findMany({
         where: { createdAt: { gte: twelveMonthsAgo } },
         select: { amount: true, createdAt: true },
       }),
+      prisma.subscription.findMany({
+        where: { status: "ACTIVE" },
+        select: { plan: true, createdAt: true, currentPeriodStart: true },
+      }),
     ]);
-    revenueThisMonth = revenueAgg._sum.amount ?? 0;
+
+    // Revenus achats
     for (const p of localPurchases) {
       const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
       if (key in revenueByMonth) revenueByMonth[key] += p.amount;
     }
+
+    // Revenus abonnements (estimation par période active)
+    for (const sub of localSubscriptions) {
+      const amount = sub.plan === "MONTHLY" ? 22 : 200;
+      const start = sub.currentPeriodStart ?? sub.createdAt;
+      const key = `${start.getFullYear()}-${start.getMonth()}`;
+      if (key in revenueByMonth) revenueByMonth[key] += amount;
+    }
+
+    revenueThisMonth = (purchaseRevenueAgg._sum.amount ?? 0)
+      + localSubscriptions.filter(s => {
+          const start = s.currentPeriodStart ?? s.createdAt;
+          return start >= startOfMonth;
+        }).reduce((sum, s) => sum + (s.plan === "MONTHLY" ? 22 : 200), 0);
   }
   const monthlyValues = Object.values(revenueByMonth);
+
+  // Ventilation des revenus par catégorie sur 12 mois
+  const formationRevenueByMonth: Record<string, number> = {};
+  const courseRevenueByMonth: Record<string, number> = {};
+  const subscriptionRevenueByMonth: Record<string, number> = {};
+
+  for (const key of Object.keys(revenueByMonth)) {
+    formationRevenueByMonth[key] = 0;
+    courseRevenueByMonth[key] = 0;
+    subscriptionRevenueByMonth[key] = 0;
+  }
+
+  for (const p of formationPurchases12m) {
+    const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
+    if (key in formationRevenueByMonth) formationRevenueByMonth[key] += p.amount;
+  }
+
+  for (const p of coursePurchases12m) {
+    const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
+    if (key in courseRevenueByMonth) courseRevenueByMonth[key] += p.amount;
+  }
+
+  for (const key of Object.keys(revenueByMonth)) {
+    subscriptionRevenueByMonth[key] = Math.max(
+      0,
+      revenueByMonth[key] - formationRevenueByMonth[key] - courseRevenueByMonth[key]
+    );
+  }
+
+  const subscriptionMonthlyValues = Object.values(subscriptionRevenueByMonth);
+  const formationMonthlyValues = Object.values(formationRevenueByMonth);
+  const courseMonthlyValues = Object.values(courseRevenueByMonth);
+
   const maxRevenue = Math.max(...monthlyValues, 1);
-  const chartBars = monthlyValues.map((v) => Math.round((v / maxRevenue) * 100));
+
+  const subscriptionRevenueThisMonth = Math.max(
+    0,
+    revenueThisMonth - formationRevenueThisMonth - courseRentalRevenueThisMonth
+  );
 
   const chartRangeLabel = `${chartLabels[0]} — ${chartLabels[11]} ${now.getFullYear()}`;
 
@@ -281,6 +364,29 @@ export default async function AdminDashboardPage() {
               {revenueThisMonth.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
             </p>
             <p className="text-sm text-muted">Revenus du mois</p>
+            <div className="mt-2 space-y-0.5">
+              <p className="text-xs text-muted flex justify-between">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
+                  Abonnements
+                </span>
+                <span>{subscriptionRevenueThisMonth.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €</span>
+              </p>
+              <p className="text-xs text-muted flex justify-between">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-purple-400 inline-block" />
+                  Formations
+                </span>
+                <span>{formationRevenueThisMonth.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €</span>
+              </p>
+              <p className="text-xs text-muted flex justify-between">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                  Locations
+                </span>
+                <span>{courseRentalRevenueThisMonth.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} €</span>
+              </p>
+            </div>
           </div>
         </div>
 
@@ -318,15 +424,38 @@ export default async function AdminDashboardPage() {
           Revenus mensuels
         </h2>
         <div className="space-y-2">
-          <div className="flex items-end gap-1 h-40">
-            {chartBars.map((h, i) => (
-              <div
-                key={i}
-                title={`${chartLabels[i]} : ${monthlyValues[i].toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}`}
-                className="flex-1 bg-button/20 hover:bg-button/50 rounded-t transition-colors"
-                style={{ height: `${Math.max(h, 2)}%` }}
-              />
-            ))}
+          <div className="flex items-end gap-1 h-48">
+            {monthlyValues.map((total, i) => {
+              const barH = Math.max(Math.round((total / maxRevenue) * 100), 2);
+              return (
+                <div
+                  key={i}
+                  className="flex-1 flex flex-col items-center justify-end"
+                  style={{ height: "100%" }}
+                >
+                  <span className="text-[9px] font-medium text-muted mb-1 leading-none">
+                    {total > 0
+                      ? total.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €"
+                      : ""}
+                  </span>
+                  <div
+                    className="w-full flex flex-col-reverse rounded-t overflow-hidden"
+                    style={{ height: `${barH}%` }}
+                    title={`${chartLabels[i]} : ${total.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}`}
+                  >
+                    {courseMonthlyValues[i] > 0 && (
+                      <div className="w-full bg-amber-400/70" style={{ flex: courseMonthlyValues[i] }} />
+                    )}
+                    {formationMonthlyValues[i] > 0 && (
+                      <div className="w-full bg-purple-400/70" style={{ flex: formationMonthlyValues[i] }} />
+                    )}
+                    {subscriptionMonthlyValues[i] > 0 && (
+                      <div className="w-full bg-green-400/70" style={{ flex: subscriptionMonthlyValues[i] }} />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <div className="flex gap-1">
             {chartLabels.map((label, i) => (
@@ -334,6 +463,20 @@ export default async function AdminDashboardPage() {
             ))}
           </div>
           <p className="text-xs text-muted text-center">{chartRangeLabel}</p>
+          <div className="flex items-center justify-center gap-4 mt-1">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm bg-green-400/70" />
+              <span className="text-xs text-muted">Abonnements</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm bg-purple-400/70" />
+              <span className="text-xs text-muted">Formations</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm bg-amber-400/70" />
+              <span className="text-xs text-muted">Locations cours</span>
+            </div>
+          </div>
         </div>
       </div>
 

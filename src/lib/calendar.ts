@@ -1,4 +1,11 @@
-import type { LiveEvent, EventRegistration } from "@prisma/client";
+import type { LiveEvent } from "@prisma/client";
+
+interface RegistrationSubset {
+  id: string;
+  userId: string;
+  occurrenceDate: Date;
+  cancelledAt: Date | null;
+}
 
 export interface EventOccurrence {
   event: LiveEvent;
@@ -13,7 +20,7 @@ export interface EventOccurrence {
  * Recurring events are expanded into individual occurrences.
  */
 export function generateOccurrences(
-  events: (LiveEvent & { registrations: EventRegistration[] })[],
+  events: (LiveEvent & { registrations: RegistrationSubset[] })[],
   rangeStart: Date,
   rangeEnd: Date,
   userId?: string

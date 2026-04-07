@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { getContents } from "@/lib/content";
 import CalendrierClient from "./CalendrierClient";
 
+export const revalidate = 60;
+
 export async function generateMetadata(): Promise<Metadata> {
   const c = await getContents([
     "seo_calendrier_title",

@@ -14,6 +14,7 @@ interface NavbarProps {
     image?: string | null;
     role?: string;
   } | null;
+  logoUrl?: string | null;
 }
 
 const publicLinks = [
@@ -24,7 +25,7 @@ const publicLinks = [
   { href: "/a-propos", label: "À propos" },
 ];
 
-export default function Navbar({ user }: NavbarProps) {
+export default function Navbar({ user, logoUrl }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
 
@@ -36,12 +37,18 @@ export default function Navbar({ user }: NavbarProps) {
         <div className="flex items-center justify-between h-16 lg:h-20">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-9 h-9 rounded-full bg-button flex items-center justify-center">
-              <span className="text-white font-heading text-lg font-bold">Y</span>
-            </div>
-            <span className="font-heading text-2xl font-bold text-heading group-hover:text-button transition-colors">
-              Prana Motion Yoga
-            </span>
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="h-9 w-auto object-contain" />
+            ) : (
+              <>
+                <div className="w-9 h-9 rounded-full bg-button flex items-center justify-center">
+                  <span className="text-white font-heading text-lg font-bold">Y</span>
+                </div>
+                <span className="font-heading text-2xl font-bold text-heading group-hover:text-button transition-colors">
+                  Prana Motion Yoga
+                </span>
+              </>
+            )}
           </Link>
 
           {/* Desktop Navigation */}

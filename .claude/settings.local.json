@@ -3,7 +3,21 @@
     "allow": [
       "Bash(git commit:*)",
       "Bash(ls /Users/jmondino/DVP/Perso/yoga-app/src/app/api/admin/formations/[id]/)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(grep -r STRIPE /Users/jmondino/DVP/Perso/yoga-app --include=*.env* --include=*.ts --include=*.tsx --include=*.js --include=*.jsx --exclude-dir=node_modules)",
+      "Read(//Users/jmondino/.nvm/versions/**)",
+      "Read(//Users/jmondino/.local/share/**)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm uninstall:*)",
+      "Bash(export PATH=\"/usr/local/bin:/opt/homebrew/bin:$HOME/.nvm/versions/node/*/bin:$PATH\")",
+      "Bash(/usr/local/bin/npm uninstall:*)",
+      "Bash(source ~/.zshrc)",
+      "Read(//Users/jmondino/DVP/Perso/yoga-app/$HOME/.nvm/versions/node/*/bin/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//Users/jmondino/DVP/Perso/yoga-app/$HOME/**)",
+      "Read(//Users/jmondino/.config/herd-lite/bin/**)",
+      "Read(//usr/local/bin/**)",
+      "Bash(PATH=\"/usr/local/bin:$PATH\")"
     ]
   }
 }

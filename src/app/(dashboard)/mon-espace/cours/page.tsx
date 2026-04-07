@@ -18,27 +18,28 @@ export default async function MesCoursPage() {
 
   const userId = session.user.id;
 
-  // Vérifier l'abonnement
-  const subscription = await prisma.subscription.findUnique({
-    where: { userId },
-  });
-  const hasActiveSubscription = subscription?.status === "ACTIVE";
+  // Parallelize all independent queries
+  const [subscription, coursePurchases, allPublished, videoProgress] = await Promise.all([
+    prisma.subscription.findUnique({ where: { userId } }),
+    prisma.purchase.findMany({
+      where: { userId, courseId: { not: null } },
+      select: { courseId: true, expiresAt: true },
+    }),
+    prisma.course.findMany({
+      where: { isPublished: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.videoProgress.findMany({
+      where: { userId },
+      select: { courseId: true, progress: true },
+    }),
+  ]);
 
-  // Cours loués individuellement
-  const coursePurchases = await prisma.purchase.findMany({
-    where: { userId, courseId: { not: null } },
-    select: { courseId: true, expiresAt: true },
-  });
+  const hasActiveSubscription = subscription?.status === "ACTIVE";
   const purchasedCourseIds = coursePurchases
     .filter((p) => !p.expiresAt || p.expiresAt > new Date())
     .map((p) => p.courseId)
     .filter(Boolean) as string[];
-
-  // Cours accessibles
-  const allPublished = await prisma.course.findMany({
-    where: { isPublished: true },
-    orderBy: { sortOrder: "asc" },
-  });
 
   let accessibleCourses = allPublished;
   if (hasActiveSubscription) {
@@ -53,11 +54,7 @@ export default async function MesCoursPage() {
     accessibleCourses = [];
   }
 
-  // Progrès des cours
-  const videoProgress = await prisma.videoProgress.findMany({
-    where: { userId },
-    select: { courseId: true, progress: true },
-  });
+  // Progrès des cours (already fetched)
   const progressByCourse = Object.fromEntries(
     videoProgress.map((p) => [p.courseId, p.progress])
   );

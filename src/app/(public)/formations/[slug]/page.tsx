@@ -11,6 +11,8 @@ import { auth } from "@/lib/auth";
 import { getPresignedUrl } from "@/lib/r2";
 import { canAccessFormation } from "@/lib/helpers/access";
 
+export const revalidate = 60;
+
 interface Props {
   params: Promise<{ slug: string }>;
 }

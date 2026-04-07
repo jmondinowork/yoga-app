@@ -184,9 +184,14 @@ export async function POST(req: NextRequest) {
           paused: 'CANCELED',
         };
 
+        const mappedStatus = statusMap[subscription.status];
+        if (!mappedStatus) {
+          console.error(`[STRIPE_WEBHOOK] Statut Stripe inconnu : "${subscription.status}" pour subscription ${subscription.id}. Fallback vers PAST_DUE.`);
+        }
+
         const item = subscription.items.data[0];
         const updateData: Record<string, unknown> = {
-          status: statusMap[subscription.status] || 'ACTIVE',
+          status: mappedStatus || 'PAST_DUE',
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
         };
 
@@ -199,10 +204,17 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        await prisma.subscription.updateMany({
+        // Si updateMany retourne count === 0, c'est probablement que checkout.session.completed
+        // n'a pas encore été traité (événements reçus hors ordre). On log un warning mais on
+        // retourne 200 pour éviter que Stripe ne retente indéfiniment.
+        const updateResult = await prisma.subscription.updateMany({
           where: { stripeSubscriptionId: subscription.id },
           data: updateData,
         });
+
+        if (updateResult.count === 0) {
+          console.warn(`[STRIPE_WEBHOOK] subscription.updated reçu pour ${subscription.id} mais aucun enregistrement trouvé en BDD. L'événement checkout.session.completed n'a peut-être pas encore été traité.`);
+        }
 
         break;
       }
@@ -217,6 +229,66 @@ export async function POST(req: NextRequest) {
             status: 'CANCELED',
             cancelAtPeriodEnd: false,
           },
+        });
+
+        break;
+      }
+
+      // ─── Remboursement ───
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge;
+        const paymentIntentId =
+          typeof charge.payment_intent === 'string'
+            ? charge.payment_intent
+            : charge.payment_intent?.id;
+
+        if (!paymentIntentId) {
+          console.warn('[STRIPE_WEBHOOK] charge.refunded sans payment_intent, ignoré.');
+          break;
+        }
+
+        if (charge.amount_refunded === charge.amount) {
+          // Remboursement total : supprimer l'accès
+          const deleted = await prisma.purchase.deleteMany({
+            where: { stripePaymentId: paymentIntentId },
+          });
+
+          if (deleted.count === 0) {
+            console.warn(`[STRIPE_WEBHOOK] charge.refunded : aucun Purchase trouvé pour payment_intent ${paymentIntentId}`);
+          } else {
+            console.log(`[STRIPE_WEBHOOK] Remboursement total : ${deleted.count} Purchase(s) supprimé(s) pour ${paymentIntentId}`);
+          }
+        } else {
+          // Remboursement partiel : on log sans modifier l'accès
+          console.log(`[STRIPE_WEBHOOK] Remboursement partiel pour ${paymentIntentId} (${charge.amount_refunded}/${charge.amount} centimes). Accès maintenu.`);
+        }
+
+        break;
+      }
+
+      // ─── Action de paiement requise (SCA/3DS) ───
+      case 'invoice.payment_action_required': {
+        const invoice = event.data.object as Stripe.Invoice;
+        const parentDetails = invoice.parent?.subscription_details;
+        const subscriptionRef = parentDetails?.subscription;
+
+        if (!subscriptionRef) break;
+
+        const subscriptionId =
+          typeof subscriptionRef === 'string'
+            ? subscriptionRef
+            : subscriptionRef.id;
+
+        const customerId =
+          typeof invoice.customer === 'string'
+            ? invoice.customer
+            : invoice.customer?.id;
+
+        console.warn(`[STRIPE_WEBHOOK] Action de paiement requise — customer: ${customerId}, subscription: ${subscriptionId}`);
+
+        await prisma.subscription.updateMany({
+          where: { stripeSubscriptionId: subscriptionId },
+          data: { status: 'PAST_DUE' },
         });
 
         break;

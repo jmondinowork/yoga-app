@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { getContents } from "@/lib/content";
 import CoursPageClient from "./CoursPageClient";
 
+export const revalidate = 60;
+
 export async function generateMetadata(): Promise<Metadata> {
   const c = await getContents(["seo_courses_title", "seo_courses_description", "seo_courses_keywords", "seo_courses_og_title", "seo_courses_og_description"]);
   const title = c["seo_courses_title"] ?? "Tous les cours";

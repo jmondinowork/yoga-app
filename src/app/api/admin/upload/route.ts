@@ -12,7 +12,7 @@ async function checkAdmin() {
   return session;
 }
 
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml'];
 const ALLOWED_VIDEO_TYPES = [
   'video/mp4',
   'video/quicktime',      // .mov
@@ -43,6 +43,9 @@ function getExtFromContentType(contentType: string): string {
     'image/webp': 'webp',
     'video/mp4': 'mp4',
     'application/pdf': 'pdf',
+    'image/x-icon': 'ico',
+    'image/vnd.microsoft.icon': 'ico',
+    'image/svg+xml': 'svg',
   };
   return map[contentType] || 'bin';
 }

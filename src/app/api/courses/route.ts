@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
     })
   );
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     courses: coursesWithThumbnails,
     pagination: {
       page,
@@ -71,4 +71,6 @@ export async function GET(req: NextRequest) {
       totalPages: Math.ceil(total / limit),
     },
   });
+  response.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120");
+  return response;
 }

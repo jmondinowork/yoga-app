@@ -4,6 +4,8 @@ import { ArrowRight, Award, Heart, BookOpen, Star } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { getContents } from "@/lib/content";
 
+export const revalidate = 120;
+
 const ABOUT_KEYS = [
   "about_hero_label",
   "about_hero_heading",

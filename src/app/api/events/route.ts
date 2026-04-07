@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
   const userId = session?.user?.id;
 
   // Fetch all published events that could have occurrences in range
+  // Only select needed registration fields instead of full records
   const events = await prisma.liveEvent.findMany({
     where: {
       isPublished: true,
@@ -51,7 +52,9 @@ export async function GET(req: NextRequest) {
       ],
     },
     include: {
-      registrations: true,
+      registrations: {
+        select: { id: true, userId: true, occurrenceDate: true, cancelledAt: true },
+      },
     },
   });
 
@@ -73,5 +76,7 @@ export async function GET(req: NextRequest) {
     isCancelled: occ.isCancelled,
   }));
 
-  return NextResponse.json({ events: result });
+  const response = NextResponse.json({ events: result });
+  response.headers.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
+  return response;
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Stripe from 'stripe';
 import { auth } from '@/lib/auth';
 import { SIMULATE_PAYMENTS, stripe, PLANS } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
@@ -320,6 +321,26 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   } catch (error) {
+    if (error instanceof Stripe.errors.StripeCardError) {
+      const messages: Record<string, string> = {
+        card_declined: 'Votre carte a été refusée.',
+        insufficient_funds: 'Fonds insuffisants.',
+        expired_card: 'Votre carte a expiré.',
+        incorrect_cvc: 'Le code CVC est incorrect.',
+        processing_error: 'Erreur de traitement, veuillez réessayer.',
+      };
+      const message = messages[error.code || ''] || error.message || 'Paiement refusé.';
+      return NextResponse.json({ error: message }, { status: 402 });
+    }
+
+    if (error instanceof Stripe.errors.StripeInvalidRequestError) {
+      console.error('[STRIPE_CHECKOUT_INVALID_REQUEST]', error.message);
+      return NextResponse.json(
+        { error: 'Requête de paiement invalide.' },
+        { status: 400 }
+      );
+    }
+
     console.error('[STRIPE_CHECKOUT_ERROR]', error);
     return NextResponse.json(
       { error: 'Erreur interne du serveur.' },

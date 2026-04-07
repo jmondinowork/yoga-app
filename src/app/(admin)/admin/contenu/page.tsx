@@ -381,7 +381,7 @@ export default function AdminContenuPage() {
           const data = await res.json();
           setContent(data);
           // Resolve presigned URLs for image keys
-          const imageKeys = ["image_homepage_hero", "image_homepage_about", "image_about_portrait", "seo_og_image"];
+          const imageKeys = ["image_homepage_hero", "image_homepage_about", "image_about_portrait", "seo_og_image", "site_logo", "site_favicon"];
           const keysToResolve = imageKeys.map(k => data[k]).filter(Boolean);
           if (keysToResolve.length > 0) {
             try {
@@ -1603,6 +1603,8 @@ export default function AdminContenuPage() {
     ...DEFAULT_COLORS.map((c) => c.key),
     "font_heading",
     "font_body",
+    "site_logo",
+    "site_favicon",
   ];
 
   function resetColors() {
@@ -1618,6 +1620,94 @@ export default function AdminContenuPage() {
   function renderApparence() {
     return (
       <div className="space-y-6">
+        <SectionCard title="Logo & Favicon">
+          <div className="grid gap-6 sm:grid-cols-2">
+            {/* Logo */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-heading">Logo du site</label>
+              <p className="text-xs text-muted">Remplace le logo texte dans la barre de navigation.</p>
+              {content["site_logo"] ? (
+                <div className="relative rounded-xl overflow-hidden border border-border bg-background p-4 flex items-center justify-center">
+                  <img src={imageUrls[content["site_logo"]] || content["site_logo"]} alt="Logo" className="max-h-20 w-auto object-contain" />
+                  <button
+                    type="button"
+                    onClick={() => { setContent(prev => { const next = {...prev}; delete next["site_logo"]; return next; }); }}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-lg p-1.5 hover:bg-red-600"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-border bg-background hover:border-button cursor-pointer transition-colors">
+                  <Upload className="w-8 h-8 text-muted mb-2" />
+                  <span className="text-sm text-muted">PNG, SVG ou WebP recommandé</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const formData = new FormData();
+                      formData.append("file", file);
+                      formData.append("type", "site-image");
+                      formData.append("imageKey", "site-logo");
+                      const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+                      if (res.ok) {
+                        const data = await res.json();
+                        setContent(prev => ({ ...prev, site_logo: data.key }));
+                        if (data.url) setImageUrls(prev => ({ ...prev, [data.key]: data.url }));
+                      }
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Favicon */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-heading">Favicon</label>
+              <p className="text-xs text-muted">Icône affichée dans l&apos;onglet du navigateur (ICO, PNG ou SVG).</p>
+              {content["site_favicon"] ? (
+                <div className="relative rounded-xl overflow-hidden border border-border bg-background p-4 flex items-center justify-center">
+                  <img src={imageUrls[content["site_favicon"]] || content["site_favicon"]} alt="Favicon" className="w-16 h-16 object-contain" />
+                  <button
+                    type="button"
+                    onClick={() => { setContent(prev => { const next = {...prev}; delete next["site_favicon"]; return next; }); }}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-lg p-1.5 hover:bg-red-600"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-border bg-background hover:border-button cursor-pointer transition-colors">
+                  <Upload className="w-8 h-8 text-muted mb-2" />
+                  <span className="text-sm text-muted">ICO, PNG ou SVG</span>
+                  <input
+                    type="file"
+                    accept="image/x-icon,image/vnd.microsoft.icon,image/png,image/svg+xml,image/webp"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const formData = new FormData();
+                      formData.append("file", file);
+                      formData.append("type", "site-image");
+                      formData.append("imageKey", "site-favicon");
+                      const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+                      if (res.ok) {
+                        const data = await res.json();
+                        setContent(prev => ({ ...prev, site_favicon: data.key }));
+                        if (data.url) setImageUrls(prev => ({ ...prev, [data.key]: data.url }));
+                      }
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+        </SectionCard>
+
         <SectionCard title="Couleurs">
           <div className="space-y-3">
             {DEFAULT_COLORS.map((c) => {

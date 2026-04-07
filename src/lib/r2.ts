@@ -53,6 +53,24 @@ export async function uploadToR2(
 }
 
 /**
+ * Récupère le contenu d'un fichier depuis R2.
+ */
+export async function getObjectFromR2(
+  key: string
+): Promise<{ body: Uint8Array; contentType: string }> {
+  const command = new GetObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: key,
+  });
+  const response = await r2Client.send(command);
+  const body = await response.Body?.transformToByteArray();
+  return {
+    body: body || new Uint8Array(),
+    contentType: response.ContentType || "application/octet-stream",
+  };
+}
+
+/**
  * Supprime un fichier de R2.
  */
 export async function deleteFromR2(key: string): Promise<void> {

@@ -10,6 +10,19 @@ export async function GET(
 
   const course = await prisma.course.findUnique({
     where: { slug, isPublished: true },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      description: true,
+      thumbnail: true,
+      duration: true,
+      theme: true,
+      price: true,
+      includedInSubscription: true,
+      sortOrder: true,
+      createdAt: true,
+    },
   });
 
   if (!course) {
@@ -19,5 +32,7 @@ export async function GET(
     );
   }
 
-  return NextResponse.json(course);
+  const response = NextResponse.json(course);
+  response.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120");
+  return response;
 }

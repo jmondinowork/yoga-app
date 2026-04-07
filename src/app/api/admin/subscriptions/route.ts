@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
@@ -10,16 +10,23 @@ async function checkAdmin() {
   return session;
 }
 
-// GET - Statistiques revenus : abonnements, achats formations, locations cours
-export async function GET() {
+// GET - Statistiques revenus : abonnements, achats formations, locations cours (paginé)
+export async function GET(req: NextRequest) {
   const session = await checkAdmin();
   if (!session) {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
   }
 
+  const { searchParams } = new URL(req.url);
+  const page = parseInt(searchParams.get('page') || '1');
+  const limit = parseInt(searchParams.get('limit') || '50');
+  const skip = (page - 1) * limit;
+
   const [
     subscriptions,
+    subscriptionCount,
     allPurchases,
+    purchaseCount,
     monthlySubs,
     annualSubs,
     totalPurchaseRevenue,
@@ -29,7 +36,10 @@ export async function GET() {
         user: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
     }),
+    prisma.subscription.count(),
     prisma.purchase.findMany({
       include: {
         user: { select: { id: true, name: true, email: true } },
@@ -37,7 +47,10 @@ export async function GET() {
         formation: { select: { id: true, title: true, slug: true } },
       },
       orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
     }),
+    prisma.purchase.count(),
     prisma.subscription.count({
       where: { plan: 'MONTHLY', status: 'ACTIVE' },
     }),
@@ -66,6 +79,12 @@ export async function GET() {
       totalCourseRentals: courseRentals.length,
       courseRentalRevenue: courseRentals.reduce((sum, p) => sum + p.amount, 0),
       totalRevenue: (totalPurchaseRevenue._sum.amount || 0),
+    },
+    pagination: {
+      page,
+      limit,
+      totalSubscriptions: subscriptionCount,
+      totalPurchases: purchaseCount,
     },
   });
 }

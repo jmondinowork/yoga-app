@@ -18,34 +18,45 @@ export default async function MonEspacePage() {
 
   const userId = session.user.id;
 
-  // Récupérer les formations achetées par l'utilisateur
-  const formationPurchases = await prisma.purchase.findMany({
-    where: { userId, formationId: { not: null } },
-    include: {
-      formation: {
-        include: {
-          videos: {
-            orderBy: { sortOrder: "asc" },
-            select: { id: true, duration: true },
+  // Parallelize ALL independent queries
+  const [formationPurchases, subscription, courseProgressRecords, coursePurchases, upcomingRegistrations] = await Promise.all([
+    prisma.purchase.findMany({
+      where: { userId, formationId: { not: null } },
+      include: {
+        formation: {
+          include: {
+            videos: { orderBy: { sortOrder: "asc" }, select: { id: true, duration: true } },
           },
         },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.subscription.findUnique({ where: { userId } }),
+    prisma.videoProgress.findMany({
+      where: { userId },
+      include: { course: true },
+      orderBy: [{ completed: "asc" }, { lastWatchedAt: "desc" }],
+    }),
+    prisma.purchase.findMany({
+      where: { userId, courseId: { not: null } },
+      include: { course: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.eventRegistration.findMany({
+      where: { userId, cancelledAt: null, occurrenceDate: { gt: new Date() } },
+      include: { event: true },
+      orderBy: { occurrenceDate: "asc" },
+      take: 4,
+    }),
+  ]);
 
-  // Abonnement (pour les cours vidéo uniquement)
-  const subscription = await prisma.subscription.findUnique({
-    where: { userId },
-  });
   const hasActiveSubscription = subscription?.status === "ACTIVE";
 
-  // Formations accessibles (achat unique seulement, pas dans l'abonnement)
   const accessibleFormations = formationPurchases
     .map((p) => p.formation)
     .filter(Boolean) as NonNullable<typeof formationPurchases[0]["formation"]>[];
 
-  // Progrès des vidéos de formation pour cet utilisateur
+  // Formation video progress (depends on formations result)
   const allVideoIds = accessibleFormations.flatMap((f) => f.videos.map((v) => v.id));
   const formationProgress = allVideoIds.length > 0
     ? await prisma.formationVideoProgress.findMany({
@@ -57,27 +68,9 @@ export default async function MonEspacePage() {
     formationProgress.map((p) => [p.formationVideoId, p])
   );
 
-  // Cours vidéo : progress (abonnement ou achat)
-  const courseProgressRecords = await prisma.videoProgress.findMany({
-    where: { userId },
-    include: { course: true },
-    orderBy: [
-      { completed: "asc" },
-      { lastWatchedAt: "desc" },
-    ],
-  });
   const watchedCourses = courseProgressRecords.map((p) => ({
-    course: p.course,
-    progress: p.progress,
-    completed: p.completed,
+    course: p.course, progress: p.progress, completed: p.completed,
   }));
-
-  // Cours loués à l'unité (sans progress encore)
-  const coursePurchases = await prisma.purchase.findMany({
-    where: { userId, courseId: { not: null } },
-    include: { course: true },
-    orderBy: { createdAt: "desc" },
-  });
   const watchedCourseIds = new Set(courseProgressRecords.map((p) => p.courseId));
   const now = new Date();
   const purchasedCoursesWithoutProgress = coursePurchases
@@ -141,23 +134,7 @@ export default async function MonEspacePage() {
       </div>
 
       {/* Mes prochains cours en direct */}
-      {await (async () => {
-        const upcomingRegistrations = await prisma.eventRegistration.findMany({
-          where: {
-            userId,
-            cancelledAt: null,
-            occurrenceDate: { gt: new Date() },
-          },
-          include: {
-            event: true,
-          },
-          orderBy: { occurrenceDate: "asc" },
-          take: 4,
-        });
-
-        if (upcomingRegistrations.length === 0) return null;
-
-        return (
+      {upcomingRegistrations.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-heading text-2xl font-bold text-heading">
@@ -224,8 +201,7 @@ export default async function MonEspacePage() {
               })}
             </div>
           </div>
-        );
-      })()}
+      )}
 
       {/* Incitation abonnement (si pas abonné) */}
       {!hasActiveSubscription && (

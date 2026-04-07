@@ -1,9 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { NextRequest } from 'next/server';
 import { prismaMock, resetPrismaMock } from '../mocks/prisma';
 import { mockAdminSession, mockSession, setSession } from '../mocks/auth';
 
 import '../mocks/prisma';
 import '../mocks/auth';
+
+function makeRequest(params: Record<string, string> = {}) {
+  const url = new URL('http://localhost/api/admin/subscriptions');
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  return new NextRequest(url);
+}
 
 describe('GET /api/admin/subscriptions', () => {
   beforeEach(() => {
@@ -14,14 +21,14 @@ describe('GET /api/admin/subscriptions', () => {
   it('retourne 403 si non admin', async () => {
     setSession(mockSession);
     const { GET } = await import('@/app/api/admin/subscriptions/route');
-    const res = await GET();
+    const res = await GET(makeRequest());
     expect(res.status).toBe(403);
   });
 
   it('retourne 403 si non connecté', async () => {
     setSession(null);
     const { GET } = await import('@/app/api/admin/subscriptions/route');
-    const res = await GET();
+    const res = await GET(makeRequest());
     expect(res.status).toBe(403);
   });
 
@@ -42,7 +49,7 @@ describe('GET /api/admin/subscriptions', () => {
     });
 
     const { GET } = await import('@/app/api/admin/subscriptions/route');
-    const res = await GET();
+    const res = await GET(makeRequest());
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -70,7 +77,7 @@ describe('GET /api/admin/subscriptions', () => {
     });
 
     const { GET } = await import('@/app/api/admin/subscriptions/route');
-    const res = await GET();
+    const res = await GET(makeRequest());
     const json = await res.json();
 
     expect(res.status).toBe(200);
