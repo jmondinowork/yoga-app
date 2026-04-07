@@ -2,13 +2,11 @@ import type { Metadata } from "next";
 import { Users, CreditCard, Video, TrendingUp, Eye, DollarSign, BookOpen, UserPlus, ShoppingBag, BarChart3, Clock } from "lucide-react";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { unstable_cache } from "next/cache";
 
 export const metadata: Metadata = {
   title: "Admin — Dashboard",
 };
-
-// Cache le dashboard 60s — évite 23 requêtes DB à chaque clic
-export const revalidate = 60;
 
 const MONTH_NAMES = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 
@@ -22,255 +20,218 @@ function formatRelativeTime(date: Date): string {
   return `Il y a ${days}j`;
 }
 
-export default async function AdminDashboardPage() {
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+const getDashboardData = unstable_cache(
+  async () => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
-  const [
-    totalUsers,
-    newUsersThisMonth,
-    activeSubscriptions,
-    newSubscriptionsThisMonth,
-    monthlySubscriptions,
-    annualSubscriptions,
-    publishedCourses,
-    publishedFormations,
-    topCourses,
-    topFormations,
-    avgCompletion,
-    activeRentals,
-    formationPurchasesThisMonth,
-    totalDurationAgg,
-    activeUsersCount,
-    avgPurchaseAgg,
-    formationRevenueThisMonthAgg,
-    courseRentalsThisMonth,
-    courseRentalRevenueThisMonthAgg,
-    recentUsers,
-    recentPurchases,
-    allPurchases12m,
-    subscriptions12m,
-  ] = await Promise.all([
-    prisma.user.count({ where: { role: Role.USER } }),
-    prisma.user.count({ where: { role: Role.USER, createdAt: { gte: startOfMonth } } }),
-    prisma.subscription.count({ where: { status: "ACTIVE", user: { role: Role.USER } } }),
-    prisma.subscription.count({ where: { createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
-    prisma.subscription.count({ where: { status: "ACTIVE", plan: "MONTHLY", user: { role: Role.USER } } }),
-    prisma.subscription.count({ where: { status: "ACTIVE", plan: "ANNUAL", user: { role: Role.USER } } }),
-    prisma.course.count({ where: { isPublished: true } }),
-    prisma.formation.count({ where: { isPublished: true } }),
-    prisma.course.findMany({
-      where: { isPublished: true },
-      orderBy: { progress: { _count: "desc" } },
-      take: 4,
-      select: {
-        title: true,
-        theme: true,
-        _count: { select: { progress: true } },
-      },
-    }),
-    prisma.formation.findMany({
-      where: { isPublished: true },
-      orderBy: { purchases: { _count: "desc" } },
-      take: 4,
-      select: {
-        title: true,
-        _count: { select: { purchases: true } },
-      },
-    }),
-    prisma.videoProgress.aggregate({ _avg: { progress: true }, where: { user: { role: Role.USER } } }),
-    prisma.purchase.count({ where: { courseId: { not: null }, expiresAt: { gt: now }, user: { role: Role.USER } } }),
-    prisma.purchase.count({ where: { formationId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
-    // Durée totale du contenu (en minutes)
-    prisma.course.aggregate({ _sum: { duration: true }, where: { isPublished: true } }),
-    // Utilisateurs actifs (7 derniers jours) — count au lieu de findMany
-    prisma.videoProgress.groupBy({
-      by: ["userId"],
-      where: { lastWatchedAt: { gte: new Date(Date.now() - 7 * 86_400_000) }, user: { role: Role.USER } },
-    }).then(r => r.length),
-    // Panier moyen
-    prisma.purchase.aggregate({ _avg: { amount: true }, _count: true, where: { user: { role: Role.USER } } }),
-    // Revenue formations ce mois
-    prisma.purchase.aggregate({ _sum: { amount: true }, where: { formationId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
-    // Locations cours ce mois
-    prisma.purchase.count({ where: { courseId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
-    prisma.purchase.aggregate({ _sum: { amount: true }, where: { courseId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
-    prisma.user.findMany({
-      where: { role: Role.USER },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        createdAt: true,
-      },
-    }),
-    prisma.purchase.findMany({
-      where: { user: { role: Role.USER } },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: {
-        user: { select: { name: true, email: true } },
-        course: { select: { title: true } },
-        formation: { select: { title: true } },
-      },
-    }),
-    // Achats (formations + cours) sur 12 mois (pour ventilation revenus)
-    prisma.purchase.findMany({
-      where: { createdAt: { gte: twelveMonthsAgo }, user: { role: Role.USER } },
-      select: { amount: true, createdAt: true, formationId: true, courseId: true },
-    }),
-    // Abonnements actifs pour revenus
-    prisma.subscription.findMany({
-      where: { status: "ACTIVE", user: { role: Role.USER } },
-      select: { plan: true, createdAt: true, currentPeriodStart: true },
-    }),
-  ]);
+    const [
+      totalUsers,
+      newUsersThisMonth,
+      activeSubscriptions,
+      newSubscriptionsThisMonth,
+      monthlySubscriptions,
+      annualSubscriptions,
+      publishedCourses,
+      publishedFormations,
+      topCourses,
+      topFormations,
+      avgCompletion,
+      activeRentals,
+      formationPurchasesThisMonth,
+      totalDurationAgg,
+      activeUsersCount,
+      avgPurchaseAgg,
+      formationRevenueThisMonthAgg,
+      courseRentalsThisMonth,
+      courseRentalRevenueThisMonthAgg,
+      recentUsers,
+      recentPurchases,
+      allPurchases12m,
+      subscriptions12m,
+    ] = await Promise.all([
+      prisma.user.count({ where: { role: Role.USER } }),
+      prisma.user.count({ where: { role: Role.USER, createdAt: { gte: startOfMonth } } }),
+      prisma.subscription.count({ where: { status: "ACTIVE", user: { role: Role.USER } } }),
+      prisma.subscription.count({ where: { createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
+      prisma.subscription.count({ where: { status: "ACTIVE", plan: "MONTHLY", user: { role: Role.USER } } }),
+      prisma.subscription.count({ where: { status: "ACTIVE", plan: "ANNUAL", user: { role: Role.USER } } }),
+      prisma.course.count({ where: { isPublished: true } }),
+      prisma.formation.count({ where: { isPublished: true } }),
+      prisma.course.findMany({
+        where: { isPublished: true },
+        orderBy: { progress: { _count: "desc" } },
+        take: 4,
+        select: {
+          title: true,
+          theme: true,
+          _count: { select: { progress: true } },
+        },
+      }),
+      prisma.formation.findMany({
+        where: { isPublished: true },
+        orderBy: { purchases: { _count: "desc" } },
+        take: 4,
+        select: {
+          title: true,
+          _count: { select: { purchases: true } },
+        },
+      }),
+      prisma.videoProgress.aggregate({ _avg: { progress: true }, where: { user: { role: Role.USER } } }),
+      prisma.purchase.count({ where: { courseId: { not: null }, expiresAt: { gt: now }, user: { role: Role.USER } } }),
+      prisma.purchase.count({ where: { formationId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
+      prisma.course.aggregate({ _sum: { duration: true }, where: { isPublished: true } }),
+      prisma.videoProgress.groupBy({
+        by: ["userId"],
+        where: { lastWatchedAt: { gte: new Date(Date.now() - 7 * 86_400_000) }, user: { role: Role.USER } },
+      }).then(r => r.length),
+      prisma.purchase.aggregate({ _avg: { amount: true }, _count: true, where: { user: { role: Role.USER } } }),
+      prisma.purchase.aggregate({ _sum: { amount: true }, where: { formationId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
+      prisma.purchase.count({ where: { courseId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
+      prisma.purchase.aggregate({ _sum: { amount: true }, where: { courseId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
+      prisma.user.findMany({
+        where: { role: Role.USER },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: { id: true, name: true, email: true, createdAt: true },
+      }),
+      prisma.purchase.findMany({
+        where: { user: { role: Role.USER } },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: {
+          user: { select: { name: true, email: true } },
+          course: { select: { title: true } },
+          formation: { select: { title: true } },
+        },
+      }),
+      prisma.purchase.findMany({
+        where: { createdAt: { gte: twelveMonthsAgo }, user: { role: Role.USER } },
+        select: { amount: true, createdAt: true, formationId: true, courseId: true },
+      }),
+      prisma.subscription.findMany({
+        where: { status: "ACTIVE", user: { role: Role.USER } },
+        select: { plan: true, createdAt: true, currentPeriodStart: true },
+      }),
+    ]);
 
-  // Build activity feed
-  type ActivityItem = {
-    type: "inscription" | "achat_formation" | "location_cours";
-    date: Date;
-    userName: string;
-    userEmail: string;
-    detail?: string;
-  };
+    // Build activity feed
+    const activityFeed: { type: "inscription" | "achat_formation" | "location_cours"; date: Date; userName: string; userEmail: string; detail?: string }[] = [];
 
-  const activityFeed: ActivityItem[] = [];
-
-  for (const user of recentUsers) {
-    activityFeed.push({
-      type: "inscription",
-      date: user.createdAt,
-      userName: user.name ?? "—",
-      userEmail: user.email,
-    });
-  }
-
-  for (const purchase of recentPurchases) {
-    if (purchase.formationId) {
-      activityFeed.push({
-        type: "achat_formation",
-        date: purchase.createdAt,
-        userName: purchase.user.name ?? "—",
-        userEmail: purchase.user.email,
-        detail: purchase.formation?.title ?? "Formation",
-      });
-    } else if (purchase.courseId) {
-      activityFeed.push({
-        type: "location_cours",
-        date: purchase.createdAt,
-        userName: purchase.user.name ?? "—",
-        userEmail: purchase.user.email,
-        detail: purchase.course?.title ?? "Cours",
-      });
+    for (const user of recentUsers) {
+      activityFeed.push({ type: "inscription", date: user.createdAt, userName: user.name ?? "—", userEmail: user.email });
     }
-  }
+    for (const purchase of recentPurchases) {
+      if (purchase.formationId) {
+        activityFeed.push({ type: "achat_formation", date: purchase.createdAt, userName: purchase.user.name ?? "—", userEmail: purchase.user.email, detail: purchase.formation?.title ?? "Formation" });
+      } else if (purchase.courseId) {
+        activityFeed.push({ type: "location_cours", date: purchase.createdAt, userName: purchase.user.name ?? "—", userEmail: purchase.user.email, detail: purchase.course?.title ?? "Cours" });
+      }
+    }
+    activityFeed.sort((a, b) => b.date.getTime() - a.date.getTime());
+    const activityItems = activityFeed.slice(0, 8).map(item => ({
+      ...item,
+      relativeTime: formatRelativeTime(item.date),
+    }));
 
-  activityFeed.sort((a, b) => b.date.getTime() - a.date.getTime());
-  const activityItems = activityFeed.slice(0, 8);
+    const averageCompletion = avgCompletion._avg.progress != null ? Math.round(avgCompletion._avg.progress * 100) : 0;
+    const totalDurationMin = totalDurationAgg._sum.duration ?? 0;
+    const totalDurationH = Math.floor(totalDurationMin / 60);
+    const totalDurationM = totalDurationMin % 60;
+    const totalDurationLabel = totalDurationH > 0
+      ? `${totalDurationH}h${totalDurationM > 0 ? `${String(totalDurationM).padStart(2, "0")}` : ""}`
+      : `${totalDurationM}min`;
+    const avgPurchaseAmount = avgPurchaseAgg._avg.amount != null ? avgPurchaseAgg._avg.amount.toFixed(2) : "0";
+    const totalPurchasesCount = avgPurchaseAgg._count;
+    const formationRevenueThisMonth = formationRevenueThisMonthAgg._sum.amount ?? 0;
+    const courseRentalRevenueThisMonth = courseRentalRevenueThisMonthAgg._sum.amount ?? 0;
 
-  const averageCompletion = avgCompletion._avg.progress != null
-    ? Math.round(avgCompletion._avg.progress * 100)
-    : 0;
+    const formationPurchases12m = allPurchases12m.filter(p => p.formationId != null);
+    const coursePurchases12m = allPurchases12m.filter(p => p.courseId != null);
 
-  const totalDurationMin = totalDurationAgg._sum.duration ?? 0;
-  const totalDurationH = Math.floor(totalDurationMin / 60);
-  const totalDurationM = totalDurationMin % 60;
-  const totalDurationLabel = totalDurationH > 0
-    ? `${totalDurationH}h${totalDurationM > 0 ? `${String(totalDurationM).padStart(2, "0")}` : ""}`
-    : `${totalDurationM}min`;
+    const revenueByMonth: Record<string, number> = {};
+    const chartLabels: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      revenueByMonth[key] = 0;
+      chartLabels.push(MONTH_NAMES[d.getMonth()]);
+    }
 
-  const avgPurchaseAmount = avgPurchaseAgg._avg.amount != null
-    ? avgPurchaseAgg._avg.amount.toFixed(2)
-    : "0";
-  const totalPurchasesCount = avgPurchaseAgg._count;
-  const formationRevenueThisMonth = formationRevenueThisMonthAgg._sum.amount ?? 0;
-  const courseRentalRevenueThisMonth = courseRentalRevenueThisMonthAgg._sum.amount ?? 0;
+    for (const p of allPurchases12m) {
+      const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
+      if (key in revenueByMonth) revenueByMonth[key] += p.amount;
+    }
+    for (const sub of subscriptions12m) {
+      const amount = sub.plan === "MONTHLY" ? 22 : 200;
+      const start = sub.currentPeriodStart ?? sub.createdAt;
+      const key = `${start.getFullYear()}-${start.getMonth()}`;
+      if (key in revenueByMonth) revenueByMonth[key] += amount;
+    }
 
-  // Séparer les achats 12m par catégorie
-  const formationPurchases12m = allPurchases12m.filter(p => p.formationId != null);
-  const coursePurchases12m = allPurchases12m.filter(p => p.courseId != null);
+    const purchaseRevenueThisMonth = allPurchases12m
+      .filter(p => p.createdAt >= startOfMonth)
+      .reduce((sum, p) => sum + p.amount, 0);
+    const revenueThisMonth = purchaseRevenueThisMonth
+      + subscriptions12m.filter(s => {
+          const start = s.currentPeriodStart ?? s.createdAt;
+          return start >= startOfMonth;
+        }).reduce((sum, s) => sum + (s.plan === "MONTHLY" ? 22 : 200), 0);
+    const monthlyValues = Object.values(revenueByMonth);
 
-  // Build monthly revenue map for the last 12 months
-  const revenueByMonth: Record<string, number> = {};
-  const chartLabels: string[] = [];
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
-    const key = `${d.getFullYear()}-${d.getMonth()}`;
-    revenueByMonth[key] = 0;
-    chartLabels.push(MONTH_NAMES[d.getMonth()]);
-  }
+    const formationRevenueByMonth: Record<string, number> = {};
+    const courseRevenueByMonth: Record<string, number> = {};
+    const subscriptionRevenueByMonth: Record<string, number> = {};
+    for (const key of Object.keys(revenueByMonth)) {
+      formationRevenueByMonth[key] = 0;
+      courseRevenueByMonth[key] = 0;
+      subscriptionRevenueByMonth[key] = 0;
+    }
+    for (const p of formationPurchases12m) {
+      const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
+      if (key in formationRevenueByMonth) formationRevenueByMonth[key] += p.amount;
+    }
+    for (const p of coursePurchases12m) {
+      const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
+      if (key in courseRevenueByMonth) courseRevenueByMonth[key] += p.amount;
+    }
+    for (const key of Object.keys(revenueByMonth)) {
+      subscriptionRevenueByMonth[key] = Math.max(0, revenueByMonth[key] - formationRevenueByMonth[key] - courseRevenueByMonth[key]);
+    }
 
-  let revenueThisMonth = 0;
+    const subscriptionMonthlyValues = Object.values(subscriptionRevenueByMonth);
+    const formationMonthlyValues = Object.values(formationRevenueByMonth);
+    const courseMonthlyValues = Object.values(courseRevenueByMonth);
+    const maxRevenue = Math.max(...monthlyValues, 1);
+    const subscriptionRevenueThisMonth = Math.max(0, revenueThisMonth - formationRevenueThisMonth - courseRentalRevenueThisMonth);
+    const chartRangeLabel = `${chartLabels[0]} — ${chartLabels[11]} ${now.getFullYear()}`;
 
-  // Revenus achats sur 12 mois
-  for (const p of allPurchases12m) {
-    const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
-    if (key in revenueByMonth) revenueByMonth[key] += p.amount;
-  }
+    return {
+      totalUsers, newUsersThisMonth, activeSubscriptions, newSubscriptionsThisMonth,
+      monthlySubscriptions, annualSubscriptions, publishedCourses, publishedFormations,
+      topCourses, topFormations, activityItems, averageCompletion,
+      formationPurchasesThisMonth, courseRentalsThisMonth,
+      revenueThisMonth, subscriptionRevenueThisMonth, formationRevenueThisMonth, courseRentalRevenueThisMonth,
+      monthlyValues, subscriptionMonthlyValues, formationMonthlyValues, courseMonthlyValues,
+      maxRevenue, chartLabels, chartRangeLabel,
+    };
+  },
+  ["admin-dashboard"],
+  { revalidate: 60, tags: ["admin-dashboard"] }
+);
 
-  // Revenus abonnements (estimation par période active)
-  for (const sub of subscriptions12m) {
-    const amount = sub.plan === "MONTHLY" ? 22 : 200;
-    const start = sub.currentPeriodStart ?? sub.createdAt;
-    const key = `${start.getFullYear()}-${start.getMonth()}`;
-    if (key in revenueByMonth) revenueByMonth[key] += amount;
-  }
-
-  // Revenu ce mois = achats ce mois + abonnements actifs ce mois
-  const purchaseRevenueThisMonth = allPurchases12m
-    .filter(p => p.createdAt >= startOfMonth)
-    .reduce((sum, p) => sum + p.amount, 0);
-  revenueThisMonth = purchaseRevenueThisMonth
-    + subscriptions12m.filter(s => {
-        const start = s.currentPeriodStart ?? s.createdAt;
-        return start >= startOfMonth;
-      }).reduce((sum, s) => sum + (s.plan === "MONTHLY" ? 22 : 200), 0);
-  const monthlyValues = Object.values(revenueByMonth);
-
-  // Ventilation des revenus par catégorie sur 12 mois
-  const formationRevenueByMonth: Record<string, number> = {};
-  const courseRevenueByMonth: Record<string, number> = {};
-  const subscriptionRevenueByMonth: Record<string, number> = {};
-
-  for (const key of Object.keys(revenueByMonth)) {
-    formationRevenueByMonth[key] = 0;
-    courseRevenueByMonth[key] = 0;
-    subscriptionRevenueByMonth[key] = 0;
-  }
-
-  for (const p of formationPurchases12m) {
-    const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
-    if (key in formationRevenueByMonth) formationRevenueByMonth[key] += p.amount;
-  }
-
-  for (const p of coursePurchases12m) {
-    const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
-    if (key in courseRevenueByMonth) courseRevenueByMonth[key] += p.amount;
-  }
-
-  for (const key of Object.keys(revenueByMonth)) {
-    subscriptionRevenueByMonth[key] = Math.max(
-      0,
-      revenueByMonth[key] - formationRevenueByMonth[key] - courseRevenueByMonth[key]
-    );
-  }
-
-  const subscriptionMonthlyValues = Object.values(subscriptionRevenueByMonth);
-  const formationMonthlyValues = Object.values(formationRevenueByMonth);
-  const courseMonthlyValues = Object.values(courseRevenueByMonth);
-
-  const maxRevenue = Math.max(...monthlyValues, 1);
-
-  const subscriptionRevenueThisMonth = Math.max(
-    0,
-    revenueThisMonth - formationRevenueThisMonth - courseRentalRevenueThisMonth
-  );
-
-  const chartRangeLabel = `${chartLabels[0]} — ${chartLabels[11]} ${now.getFullYear()}`;
+export default async function AdminDashboardPage() {
+  const data = await getDashboardData();
+  const {
+    totalUsers, newUsersThisMonth, activeSubscriptions, newSubscriptionsThisMonth,
+    monthlySubscriptions, annualSubscriptions, publishedCourses, publishedFormations,
+    topCourses, topFormations, activityItems, averageCompletion,
+    formationPurchasesThisMonth, courseRentalsThisMonth,
+    revenueThisMonth, subscriptionRevenueThisMonth, formationRevenueThisMonth, courseRentalRevenueThisMonth,
+    monthlyValues, subscriptionMonthlyValues, formationMonthlyValues, courseMonthlyValues,
+    maxRevenue, chartLabels, chartRangeLabel,
+  } = data;
 
   return (
     <div className="space-y-8">
@@ -626,7 +587,7 @@ export default async function AdminDashboardPage() {
                       {icon}
                       {label}
                     </span>
-                    <p className="text-xs text-muted">{formatRelativeTime(item.date)}</p>
+                    <p className="text-xs text-muted">{item.relativeTime}</p>
                   </div>
                 </div>
               );

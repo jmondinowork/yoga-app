@@ -54,6 +54,7 @@ export default function AdminSidebar() {
             <Link
               key={link.href}
               href={link.href}
+              prefetch={false}
               className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                 isActive
                   ? "bg-button text-white"
