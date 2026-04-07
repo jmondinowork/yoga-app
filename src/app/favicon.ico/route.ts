@@ -10,7 +10,7 @@ export async function GET() {
   if (faviconKey) {
     try {
       const { body, contentType } = await getObjectFromR2(faviconKey);
-      return new NextResponse(new Blob([body]), {
+      return new NextResponse(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer, {
         headers: {
           "Content-Type": contentType,
           "Cache-Control": "public, max-age=3600, s-maxage=3600",
@@ -24,7 +24,7 @@ export async function GET() {
   // Serve default favicon from public/
   const defaultPath = join(process.cwd(), "public", "default-favicon.ico");
   const buffer = await readFile(defaultPath);
-  return new NextResponse(new Blob([buffer]), {
+  return new NextResponse(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer, {
     headers: {
       "Content-Type": "image/x-icon",
       "Cache-Control": "public, max-age=86400",
