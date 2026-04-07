@@ -57,6 +57,7 @@ export default function Navbar({ user, logoUrl }: NavbarProps) {
               <Link
                 key={link.href}
                 href={link.href}
+                prefetch={false}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive(link.href)
                     ? "bg-primary/60 text-heading"
@@ -127,6 +128,7 @@ export default function Navbar({ user, logoUrl }: NavbarProps) {
               <Link
                 key={link.href}
                 href={link.href}
+                prefetch={false}
                 onClick={() => setIsOpen(false)}
                 className={`block px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
                   isActive(link.href)

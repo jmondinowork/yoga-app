@@ -21,7 +21,7 @@ export default async function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Brand */}
           <div className="space-y-4">
-            <Link href="/" className="flex items-center gap-2">
+            <Link href="/" prefetch={false} className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-full bg-button flex items-center justify-center">
                 <span className="text-white font-heading text-lg font-bold">Y</span>
               </div>
@@ -61,12 +61,12 @@ export default async function Footer() {
             <h3 className="font-heading text-lg font-semibold text-white">Cours vidéo</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/cours" className="text-sm hover:text-white transition-colors">
+                <Link href="/cours" prefetch={false} className="text-sm hover:text-white transition-colors">
                   Cours vidéos
                 </Link>
               </li>
               <li>
-                <Link href="/formations" className="text-sm hover:text-white transition-colors">
+                <Link href="/formations" prefetch={false} className="text-sm hover:text-white transition-colors">
                   Formations
                 </Link>
               </li>
@@ -78,12 +78,12 @@ export default async function Footer() {
             <h3 className="font-heading text-lg font-semibold text-white">Informations</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/a-propos" className="text-sm hover:text-white transition-colors">
+                <Link href="/a-propos" prefetch={false} className="text-sm hover:text-white transition-colors">
                   À propos
                 </Link>
               </li>
               <li>
-                <Link href="/tarifs" className="text-sm hover:text-white transition-colors">
+                <Link href="/tarifs" prefetch={false} className="text-sm hover:text-white transition-colors">
                   Tarifs
                 </Link>
               </li>
@@ -95,17 +95,17 @@ export default async function Footer() {
             <h3 className="font-heading text-lg font-semibold text-white">Légal</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/mentions-legales" className="text-sm hover:text-white transition-colors">
+                <Link href="/mentions-legales" prefetch={false} className="text-sm hover:text-white transition-colors">
                   Mentions légales
                 </Link>
               </li>
               <li>
-                <Link href="/cgv" className="text-sm hover:text-white transition-colors">
+                <Link href="/cgv" prefetch={false} className="text-sm hover:text-white transition-colors">
                   CGV
                 </Link>
               </li>
               <li>
-                <Link href="/confidentialite" className="text-sm hover:text-white transition-colors">
+                <Link href="/confidentialite" prefetch={false} className="text-sm hover:text-white transition-colors">
                   Politique de confidentialité
                 </Link>
               </li>
