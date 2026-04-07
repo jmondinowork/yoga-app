@@ -78,14 +78,14 @@ export default async function AdminDashboardPage() {
         _count: { select: { purchases: true } },
       },
     }),
-    prisma.videoProgress.aggregate({ _avg: { progress: true } }),
+    prisma.videoProgress.aggregate({ _avg: { progress: true }, where: { user: { role: Role.USER } } }),
     prisma.purchase.count({ where: { courseId: { not: null }, expiresAt: { gt: now }, user: { role: Role.USER } } }),
     prisma.purchase.count({ where: { formationId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
     // Durée totale du contenu (en minutes)
     prisma.course.aggregate({ _sum: { duration: true }, where: { isPublished: true } }),
     // Utilisateurs actifs (7 derniers jours)
     prisma.videoProgress.findMany({
-      where: { lastWatchedAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
+      where: { lastWatchedAt: { gte: new Date(Date.now() - 7 * 86_400_000) }, user: { role: Role.USER } },
       select: { userId: true },
       distinct: ["userId"],
     }),
@@ -108,6 +108,7 @@ export default async function AdminDashboardPage() {
       },
     }),
     prisma.purchase.findMany({
+      where: { user: { role: Role.USER } },
       orderBy: { createdAt: "desc" },
       take: 5,
       include: {
@@ -203,8 +204,14 @@ export default async function AdminDashboardPage() {
   let revenueThisMonth = 0;
 
   if (!SIMULATE_PAYMENTS) {
-    // Données réelles depuis Stripe — pagination complète
+    // Données réelles depuis Stripe — pagination complète (exclure admins)
     const stripeClient = getStripe();
+    const adminCustomerIds = new Set(
+      (await prisma.user.findMany({
+        where: { role: Role.ADMIN, stripeCustomerId: { not: null } },
+        select: { stripeCustomerId: true },
+      })).map(u => u.stripeCustomerId!)
+    );
     const createdGte = Math.floor(twelveMonthsAgo.getTime() / 1000);
     let hasMore = true;
     let startingAfter: string | undefined;
@@ -219,6 +226,9 @@ export default async function AdminDashboardPage() {
       const batch = await stripeClient.charges.list(params);
       for (const charge of batch.data) {
         if (charge.status !== "succeeded") continue;
+        // Exclure les charges des utilisateurs admin
+        const customerId = typeof charge.customer === "string" ? charge.customer : charge.customer?.id;
+        if (customerId && adminCustomerIds.has(customerId)) continue;
         const net = (charge.amount - (charge.amount_refunded ?? 0)) / 100;
         if (net <= 0) continue;
         const d = new Date(charge.created * 1000);
@@ -234,13 +244,13 @@ export default async function AdminDashboardPage() {
   } else {
     // Mode simulation : lecture des tables Purchase + Subscription
     const [purchaseRevenueAgg, localPurchases, localSubscriptions] = await Promise.all([
-      prisma.purchase.aggregate({ _sum: { amount: true }, where: { createdAt: { gte: startOfMonth } } }),
+      prisma.purchase.aggregate({ _sum: { amount: true }, where: { createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
       prisma.purchase.findMany({
-        where: { createdAt: { gte: twelveMonthsAgo } },
+        where: { createdAt: { gte: twelveMonthsAgo }, user: { role: Role.USER } },
         select: { amount: true, createdAt: true },
       }),
       prisma.subscription.findMany({
-        where: { status: "ACTIVE" },
+        where: { status: "ACTIVE", user: { role: Role.USER } },
         select: { plan: true, createdAt: true, currentPeriodStart: true },
       }),
     ]);
