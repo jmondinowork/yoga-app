@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { Users, CreditCard, Video, TrendingUp, Eye, DollarSign, BookOpen, UserPlus, ShoppingBag, BarChart3, Clock } from "lucide-react";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import Stripe from "stripe";
-import { SIMULATE_PAYMENTS, getStripe, PLANS } from "@/lib/stripe";
 
 export const metadata: Metadata = {
   title: "Admin — Dashboard",
@@ -29,10 +27,10 @@ export default async function AdminDashboardPage() {
   const [
     totalUsers,
     newUsersThisMonth,
-    prismaActiveSubscriptions,
+    activeSubscriptions,
     newSubscriptionsThisMonth,
-    prismaMonthlySubscriptions,
-    prismaAnnualSubscriptions,
+    monthlySubscriptions,
+    annualSubscriptions,
     publishedCourses,
     publishedFormations,
     topCourses,
@@ -129,43 +127,6 @@ export default async function AdminDashboardPage() {
     }),
   ]);
 
-  // Comptage abonnements : Stripe réel ou fallback Prisma
-  let monthlySubscriptions = prismaMonthlySubscriptions;
-  let annualSubscriptions = prismaAnnualSubscriptions;
-  let activeSubscriptions = prismaActiveSubscriptions;
-
-  if (!SIMULATE_PAYMENTS) {
-    try {
-      const stripeClient = getStripe();
-      const monthlyPriceId = PLANS.find(p => p.id === "monthly")?.priceId;
-      const annualPriceId = PLANS.find(p => p.id === "annual")?.priceId;
-
-      async function countActiveStripeSubs(priceId: string | undefined): Promise<number> {
-        if (!priceId) return 0;
-        let count = 0;
-        let hasMore = true;
-        let startingAfter: string | undefined;
-        while (hasMore) {
-          const params: Record<string, unknown> = { price: priceId, status: "active", limit: 100 };
-          if (startingAfter) params.starting_after = startingAfter;
-          const batch = await stripeClient.subscriptions.list(params as Stripe.SubscriptionListParams);
-          count += batch.data.length;
-          hasMore = batch.has_more;
-          if (batch.data.length > 0) startingAfter = batch.data[batch.data.length - 1].id;
-        }
-        return count;
-      }
-
-      [monthlySubscriptions, annualSubscriptions] = await Promise.all([
-        countActiveStripeSubs(monthlyPriceId),
-        countActiveStripeSubs(annualPriceId),
-      ]);
-      activeSubscriptions = monthlySubscriptions + annualSubscriptions;
-    } catch (e) {
-      console.error("Stripe subscriptions count failed, using Prisma fallback", e);
-    }
-  }
-
   // Build activity feed
   type ActivityItem = {
     type: "inscription" | "achat_formation" | "location_cours";
@@ -240,46 +201,7 @@ export default async function AdminDashboardPage() {
 
   let revenueThisMonth = 0;
 
-  if (!SIMULATE_PAYMENTS) {
-    // Données réelles depuis Stripe — pagination complète (exclure admins)
-    const stripeClient = getStripe();
-    const adminCustomerIds = new Set(
-      (await prisma.user.findMany({
-        where: { role: Role.ADMIN, stripeCustomerId: { not: null } },
-        select: { stripeCustomerId: true },
-      })).map(u => u.stripeCustomerId!)
-    );
-    const createdGte = Math.floor(twelveMonthsAgo.getTime() / 1000);
-    let hasMore = true;
-    let startingAfter: string | undefined;
-
-    while (hasMore) {
-      const params: Stripe.ChargeListParams = {
-        created: { gte: createdGte },
-        limit: 100,
-      };
-      if (startingAfter) params.starting_after = startingAfter;
-
-      const batch = await stripeClient.charges.list(params);
-      for (const charge of batch.data) {
-        if (charge.status !== "succeeded") continue;
-        // Exclure les charges des utilisateurs admin
-        const customerId = typeof charge.customer === "string" ? charge.customer : charge.customer?.id;
-        if (customerId && adminCustomerIds.has(customerId)) continue;
-        const net = (charge.amount - (charge.amount_refunded ?? 0)) / 100;
-        if (net <= 0) continue;
-        const d = new Date(charge.created * 1000);
-        const key = `${d.getFullYear()}-${d.getMonth()}`;
-        if (key in revenueByMonth) revenueByMonth[key] += net;
-        if (d >= startOfMonth) revenueThisMonth += net;
-      }
-      hasMore = batch.has_more;
-      if (batch.data.length > 0) {
-        startingAfter = batch.data[batch.data.length - 1].id;
-      }
-    }
-  } else {
-    // Mode simulation : lecture des tables Purchase + Subscription
+  {
     const [purchaseRevenueAgg, localPurchases, localSubscriptions] = await Promise.all([
       prisma.purchase.aggregate({ _sum: { amount: true }, where: { createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
       prisma.purchase.findMany({

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Role } from '@prisma/client';
-import { SIMULATE_PAYMENTS, getStripe, PLANS } from '@/lib/stripe';
 
 async function checkAdmin() {
   const session = await auth();
@@ -74,52 +73,16 @@ export async function GET(req: NextRequest) {
   const formationPurchases = allPurchases.filter(p => p.formationId != null);
   const courseRentals = allPurchases.filter(p => p.courseId != null);
 
-  // Stats abonnements : Stripe réel ou fallback Prisma
-  let monthlyActive = monthlySubs;
-  let annualActive = annualSubs;
-
-  if (!SIMULATE_PAYMENTS) {
-    try {
-      const stripeClient = getStripe();
-      const monthlyPriceId = PLANS.find(p => p.id === 'monthly')?.priceId;
-      const annualPriceId = PLANS.find(p => p.id === 'annual')?.priceId;
-
-      // Compter les abonnements actifs Stripe par price_id
-      async function countActiveSubscriptions(priceId: string | undefined): Promise<number> {
-        if (!priceId) return 0;
-        let count = 0;
-        let hasMore = true;
-        let startingAfter: string | undefined;
-        while (hasMore) {
-          const params: Record<string, unknown> = { price: priceId, status: 'active', limit: 100 };
-          if (startingAfter) params.starting_after = startingAfter;
-          const batch = await stripeClient.subscriptions.list(params as Parameters<typeof stripeClient.subscriptions.list>[0]);
-          count += batch.data.length;
-          hasMore = batch.has_more;
-          if (batch.data.length > 0) startingAfter = batch.data[batch.data.length - 1].id;
-        }
-        return count;
-      }
-
-      [monthlyActive, annualActive] = await Promise.all([
-        countActiveSubscriptions(monthlyPriceId),
-        countActiveSubscriptions(annualPriceId),
-      ]);
-    } catch (e) {
-      console.error('Stripe subscriptions fetch failed, using Prisma fallback', e);
-    }
-  }
-
   const purchaseRevenue = totalPurchaseRevenue._sum.amount || 0;
-  const mrrTotal = monthlyActive * 22 + annualActive * (200 / 12);
+  const mrrTotal = monthlySubs * 22 + annualSubs * (200 / 12);
 
   return NextResponse.json({
     subscriptions,
     formationPurchases,
     courseRentals,
     stats: {
-      monthlyActive,
-      annualActive,
+      monthlyActive: monthlySubs,
+      annualActive: annualSubs,
       totalFormationPurchases: formationPurchases.length,
       formationRevenue: formationPurchases.reduce((sum, p) => sum + p.amount, 0),
       totalCourseRentals: courseRentals.length,
