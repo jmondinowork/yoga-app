@@ -7,6 +7,9 @@ export const metadata: Metadata = {
   title: "Admin — Dashboard",
 };
 
+// Cache le dashboard 60s — évite 23 requêtes DB à chaque clic
+export const revalidate = 60;
+
 const MONTH_NAMES = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 
 function formatRelativeTime(date: Date): string {
@@ -39,15 +42,15 @@ export default async function AdminDashboardPage() {
     activeRentals,
     formationPurchasesThisMonth,
     totalDurationAgg,
-    activeUsersRaw,
+    activeUsersCount,
     avgPurchaseAgg,
     formationRevenueThisMonthAgg,
     courseRentalsThisMonth,
     courseRentalRevenueThisMonthAgg,
     recentUsers,
     recentPurchases,
-    formationPurchases12m,
-    coursePurchases12m,
+    allPurchases12m,
+    subscriptions12m,
   ] = await Promise.all([
     prisma.user.count({ where: { role: Role.USER } }),
     prisma.user.count({ where: { role: Role.USER, createdAt: { gte: startOfMonth } } }),
@@ -81,12 +84,11 @@ export default async function AdminDashboardPage() {
     prisma.purchase.count({ where: { formationId: { not: null }, createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
     // Durée totale du contenu (en minutes)
     prisma.course.aggregate({ _sum: { duration: true }, where: { isPublished: true } }),
-    // Utilisateurs actifs (7 derniers jours)
-    prisma.videoProgress.findMany({
+    // Utilisateurs actifs (7 derniers jours) — count au lieu de findMany
+    prisma.videoProgress.groupBy({
+      by: ["userId"],
       where: { lastWatchedAt: { gte: new Date(Date.now() - 7 * 86_400_000) }, user: { role: Role.USER } },
-      select: { userId: true },
-      distinct: ["userId"],
-    }),
+    }).then(r => r.length),
     // Panier moyen
     prisma.purchase.aggregate({ _avg: { amount: true }, _count: true, where: { user: { role: Role.USER } } }),
     // Revenue formations ce mois
@@ -115,15 +117,15 @@ export default async function AdminDashboardPage() {
         formation: { select: { title: true } },
       },
     }),
-    // Achats formations sur 12 mois (pour ventilation revenus)
+    // Achats (formations + cours) sur 12 mois (pour ventilation revenus)
     prisma.purchase.findMany({
-      where: { formationId: { not: null }, createdAt: { gte: twelveMonthsAgo }, user: { role: Role.USER } },
-      select: { amount: true, createdAt: true },
+      where: { createdAt: { gte: twelveMonthsAgo }, user: { role: Role.USER } },
+      select: { amount: true, createdAt: true, formationId: true, courseId: true },
     }),
-    // Locations cours sur 12 mois (pour ventilation revenus)
-    prisma.purchase.findMany({
-      where: { courseId: { not: null }, createdAt: { gte: twelveMonthsAgo }, user: { role: Role.USER } },
-      select: { amount: true, createdAt: true },
+    // Abonnements actifs pour revenus
+    prisma.subscription.findMany({
+      where: { status: "ACTIVE", user: { role: Role.USER } },
+      select: { plan: true, createdAt: true, currentPeriodStart: true },
     }),
   ]);
 
@@ -181,13 +183,16 @@ export default async function AdminDashboardPage() {
     ? `${totalDurationH}h${totalDurationM > 0 ? `${String(totalDurationM).padStart(2, "0")}` : ""}`
     : `${totalDurationM}min`;
 
-  const activeUsersCount = activeUsersRaw.length;
   const avgPurchaseAmount = avgPurchaseAgg._avg.amount != null
     ? avgPurchaseAgg._avg.amount.toFixed(2)
     : "0";
   const totalPurchasesCount = avgPurchaseAgg._count;
   const formationRevenueThisMonth = formationRevenueThisMonthAgg._sum.amount ?? 0;
   const courseRentalRevenueThisMonth = courseRentalRevenueThisMonthAgg._sum.amount ?? 0;
+
+  // Séparer les achats 12m par catégorie
+  const formationPurchases12m = allPurchases12m.filter(p => p.formationId != null);
+  const coursePurchases12m = allPurchases12m.filter(p => p.courseId != null);
 
   // Build monthly revenue map for the last 12 months
   const revenueByMonth: Record<string, number> = {};
@@ -201,39 +206,29 @@ export default async function AdminDashboardPage() {
 
   let revenueThisMonth = 0;
 
-  {
-    const [purchaseRevenueAgg, localPurchases, localSubscriptions] = await Promise.all([
-      prisma.purchase.aggregate({ _sum: { amount: true }, where: { createdAt: { gte: startOfMonth }, user: { role: Role.USER } } }),
-      prisma.purchase.findMany({
-        where: { createdAt: { gte: twelveMonthsAgo }, user: { role: Role.USER } },
-        select: { amount: true, createdAt: true },
-      }),
-      prisma.subscription.findMany({
-        where: { status: "ACTIVE", user: { role: Role.USER } },
-        select: { plan: true, createdAt: true, currentPeriodStart: true },
-      }),
-    ]);
-
-    // Revenus achats
-    for (const p of localPurchases) {
-      const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
-      if (key in revenueByMonth) revenueByMonth[key] += p.amount;
-    }
-
-    // Revenus abonnements (estimation par période active)
-    for (const sub of localSubscriptions) {
-      const amount = sub.plan === "MONTHLY" ? 22 : 200;
-      const start = sub.currentPeriodStart ?? sub.createdAt;
-      const key = `${start.getFullYear()}-${start.getMonth()}`;
-      if (key in revenueByMonth) revenueByMonth[key] += amount;
-    }
-
-    revenueThisMonth = (purchaseRevenueAgg._sum.amount ?? 0)
-      + localSubscriptions.filter(s => {
-          const start = s.currentPeriodStart ?? s.createdAt;
-          return start >= startOfMonth;
-        }).reduce((sum, s) => sum + (s.plan === "MONTHLY" ? 22 : 200), 0);
+  // Revenus achats sur 12 mois
+  for (const p of allPurchases12m) {
+    const key = `${p.createdAt.getFullYear()}-${p.createdAt.getMonth()}`;
+    if (key in revenueByMonth) revenueByMonth[key] += p.amount;
   }
+
+  // Revenus abonnements (estimation par période active)
+  for (const sub of subscriptions12m) {
+    const amount = sub.plan === "MONTHLY" ? 22 : 200;
+    const start = sub.currentPeriodStart ?? sub.createdAt;
+    const key = `${start.getFullYear()}-${start.getMonth()}`;
+    if (key in revenueByMonth) revenueByMonth[key] += amount;
+  }
+
+  // Revenu ce mois = achats ce mois + abonnements actifs ce mois
+  const purchaseRevenueThisMonth = allPurchases12m
+    .filter(p => p.createdAt >= startOfMonth)
+    .reduce((sum, p) => sum + p.amount, 0);
+  revenueThisMonth = purchaseRevenueThisMonth
+    + subscriptions12m.filter(s => {
+        const start = s.currentPeriodStart ?? s.createdAt;
+        return start >= startOfMonth;
+      }).reduce((sum, s) => sum + (s.plan === "MONTHLY" ? 22 : 200), 0);
   const monthlyValues = Object.values(revenueByMonth);
 
   // Ventilation des revenus par catégorie sur 12 mois

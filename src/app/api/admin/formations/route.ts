@@ -59,9 +59,20 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
-      include: {
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        description: true,
+        thumbnail: true,
+        bookletUrl: true,
+        price: true,
+        isPublished: true,
+        createdAt: true,
+        updatedAt: true,
         videos: {
           orderBy: { sortOrder: 'asc' },
+          select: { id: true, title: true, duration: true, sortOrder: true },
         },
         _count: {
           select: { purchases: true, videos: true },

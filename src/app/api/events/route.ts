@@ -53,6 +53,9 @@ export async function GET(req: NextRequest) {
     },
     include: {
       registrations: {
+        where: userId
+          ? { OR: [{ cancelledAt: null }, { userId }] }
+          : { cancelledAt: null },
         select: { id: true, userId: true, occurrenceDate: true, cancelledAt: true },
       },
     },

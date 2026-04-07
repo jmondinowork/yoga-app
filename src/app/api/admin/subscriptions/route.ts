@@ -28,15 +28,22 @@ export async function GET(req: NextRequest) {
   const [
     subscriptions,
     subscriptionCount,
-    allPurchases,
+    formationPurchases,
+    courseRentals,
     purchaseCount,
     monthlySubs,
     annualSubs,
     totalPurchaseRevenue,
+    totalFormationCount,
+    totalFormationRevenue,
+    totalCourseRentalCount,
+    totalCourseRentalRevenue,
   ] = await Promise.all([
     prisma.subscription.findMany({
       where: userFilter,
-      include: {
+      select: {
+        id: true, plan: true, status: true, currentPeriodEnd: true,
+        cancelAtPeriodEnd: true, createdAt: true,
         user: { select: { id: true, name: true, email: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -45,11 +52,22 @@ export async function GET(req: NextRequest) {
     }),
     prisma.subscription.count({ where: userFilter }),
     prisma.purchase.findMany({
-      where: userFilter,
-      include: {
+      where: { ...userFilter, formationId: { not: null } },
+      select: {
+        id: true, amount: true, createdAt: true, expiresAt: true,
+        user: { select: { id: true, name: true, email: true } },
+        formation: { select: { id: true, title: true, slug: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.purchase.findMany({
+      where: { ...userFilter, courseId: { not: null } },
+      select: {
+        id: true, amount: true, createdAt: true, expiresAt: true,
         user: { select: { id: true, name: true, email: true } },
         course: { select: { id: true, title: true, slug: true } },
-        formation: { select: { id: true, title: true, slug: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -64,14 +82,14 @@ export async function GET(req: NextRequest) {
     }),
     prisma.purchase.aggregate({
       _sum: { amount: true },
-      _count: true,
       where: userFilter,
     }),
+    // Stats globales (pas paginées)
+    prisma.purchase.count({ where: { ...userFilter, formationId: { not: null } } }),
+    prisma.purchase.aggregate({ _sum: { amount: true }, where: { ...userFilter, formationId: { not: null } } }),
+    prisma.purchase.count({ where: { ...userFilter, courseId: { not: null } } }),
+    prisma.purchase.aggregate({ _sum: { amount: true }, where: { ...userFilter, courseId: { not: null } } }),
   ]);
-
-  // Séparer achats formations vs locations cours
-  const formationPurchases = allPurchases.filter(p => p.formationId != null);
-  const courseRentals = allPurchases.filter(p => p.courseId != null);
 
   const purchaseRevenue = totalPurchaseRevenue._sum.amount || 0;
   const mrrTotal = monthlySubs * 22 + annualSubs * (200 / 12);
@@ -83,10 +101,10 @@ export async function GET(req: NextRequest) {
     stats: {
       monthlyActive: monthlySubs,
       annualActive: annualSubs,
-      totalFormationPurchases: formationPurchases.length,
-      formationRevenue: formationPurchases.reduce((sum, p) => sum + p.amount, 0),
-      totalCourseRentals: courseRentals.length,
-      courseRentalRevenue: courseRentals.reduce((sum, p) => sum + p.amount, 0),
+      totalFormationPurchases: totalFormationCount,
+      formationRevenue: totalFormationRevenue._sum.amount || 0,
+      totalCourseRentals: totalCourseRentalCount,
+      courseRentalRevenue: totalCourseRentalRevenue._sum.amount || 0,
       totalRevenue: purchaseRevenue + mrrTotal,
     },
     pagination: {
