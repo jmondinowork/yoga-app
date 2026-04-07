@@ -3,7 +3,7 @@ import { Users, CreditCard, Video, TrendingUp, Eye, DollarSign, BookOpen, UserPl
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import Stripe from "stripe";
-import { SIMULATE_PAYMENTS, getStripe } from "@/lib/stripe";
+import { SIMULATE_PAYMENTS, getStripe, PLANS } from "@/lib/stripe";
 
 export const metadata: Metadata = {
   title: "Admin — Dashboard",
@@ -29,10 +29,10 @@ export default async function AdminDashboardPage() {
   const [
     totalUsers,
     newUsersThisMonth,
-    activeSubscriptions,
+    prismaActiveSubscriptions,
     newSubscriptionsThisMonth,
-    monthlySubscriptions,
-    annualSubscriptions,
+    prismaMonthlySubscriptions,
+    prismaAnnualSubscriptions,
     publishedCourses,
     publishedFormations,
     topCourses,
@@ -128,6 +128,43 @@ export default async function AdminDashboardPage() {
       select: { amount: true, createdAt: true },
     }),
   ]);
+
+  // Comptage abonnements : Stripe réel ou fallback Prisma
+  let monthlySubscriptions = prismaMonthlySubscriptions;
+  let annualSubscriptions = prismaAnnualSubscriptions;
+  let activeSubscriptions = prismaActiveSubscriptions;
+
+  if (!SIMULATE_PAYMENTS) {
+    try {
+      const stripeClient = getStripe();
+      const monthlyPriceId = PLANS.find(p => p.id === "monthly")?.priceId;
+      const annualPriceId = PLANS.find(p => p.id === "annual")?.priceId;
+
+      async function countActiveStripeSubs(priceId: string | undefined): Promise<number> {
+        if (!priceId) return 0;
+        let count = 0;
+        let hasMore = true;
+        let startingAfter: string | undefined;
+        while (hasMore) {
+          const params: Record<string, unknown> = { price: priceId, status: "active", limit: 100 };
+          if (startingAfter) params.starting_after = startingAfter;
+          const batch = await stripeClient.subscriptions.list(params as Stripe.SubscriptionListParams);
+          count += batch.data.length;
+          hasMore = batch.has_more;
+          if (batch.data.length > 0) startingAfter = batch.data[batch.data.length - 1].id;
+        }
+        return count;
+      }
+
+      [monthlySubscriptions, annualSubscriptions] = await Promise.all([
+        countActiveStripeSubs(monthlyPriceId),
+        countActiveStripeSubs(annualPriceId),
+      ]);
+      activeSubscriptions = monthlySubscriptions + annualSubscriptions;
+    } catch (e) {
+      console.error("Stripe subscriptions count failed, using Prisma fallback", e);
+    }
+  }
 
   // Build activity feed
   type ActivityItem = {

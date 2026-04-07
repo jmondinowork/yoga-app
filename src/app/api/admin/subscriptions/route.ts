@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { SIMULATE_PAYMENTS, getStripe } from '@/lib/stripe';
 import { Role } from '@prisma/client';
-import type Stripe from 'stripe';
+import { SIMULATE_PAYMENTS, getStripe, PLANS } from '@/lib/stripe';
 
 async function checkAdmin() {
   const session = await auth();
@@ -75,60 +74,57 @@ export async function GET(req: NextRequest) {
   const formationPurchases = allPurchases.filter(p => p.formationId != null);
   const courseRentals = allPurchases.filter(p => p.courseId != null);
 
-  // Revenu total : données Stripe réelles ou fallback Prisma
-  let totalRevenue = totalPurchaseRevenue._sum.amount || 0;
+  // Stats abonnements : Stripe réel ou fallback Prisma
+  let monthlyActive = monthlySubs;
+  let annualActive = annualSubs;
 
   if (!SIMULATE_PAYMENTS) {
     try {
       const stripeClient = getStripe();
-      // Exclure les charges des admins
-      const adminCustomerIds = new Set(
-        (await prisma.user.findMany({
-          where: { role: Role.ADMIN, stripeCustomerId: { not: null } },
-          select: { stripeCustomerId: true },
-        })).map(u => u.stripeCustomerId!)
-      );
+      const monthlyPriceId = PLANS.find(p => p.id === 'monthly')?.priceId;
+      const annualPriceId = PLANS.find(p => p.id === 'annual')?.priceId;
 
-      let stripeTotal = 0;
-      let hasMore = true;
-      let startingAfter: string | undefined;
-
-      while (hasMore) {
-        const params: Record<string, unknown> = { limit: 100 };
-        if (startingAfter) params.starting_after = startingAfter;
-
-        const batch = await stripeClient.charges.list(params as Stripe.ChargeListParams);
-        for (const charge of batch.data) {
-          if (charge.status !== 'succeeded') continue;
-          const customerId = typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
-          if (customerId && adminCustomerIds.has(customerId)) continue;
-          const net = (charge.amount - (charge.amount_refunded ?? 0)) / 100;
-          if (net > 0) stripeTotal += net;
+      // Compter les abonnements actifs Stripe par price_id
+      async function countActiveSubscriptions(priceId: string | undefined): Promise<number> {
+        if (!priceId) return 0;
+        let count = 0;
+        let hasMore = true;
+        let startingAfter: string | undefined;
+        while (hasMore) {
+          const params: Record<string, unknown> = { price: priceId, status: 'active', limit: 100 };
+          if (startingAfter) params.starting_after = startingAfter;
+          const batch = await stripeClient.subscriptions.list(params as Parameters<typeof stripeClient.subscriptions.list>[0]);
+          count += batch.data.length;
+          hasMore = batch.has_more;
+          if (batch.data.length > 0) startingAfter = batch.data[batch.data.length - 1].id;
         }
-        hasMore = batch.has_more;
-        if (batch.data.length > 0) {
-          startingAfter = batch.data[batch.data.length - 1].id;
-        }
+        return count;
       }
 
-      totalRevenue = stripeTotal;
+      [monthlyActive, annualActive] = await Promise.all([
+        countActiveSubscriptions(monthlyPriceId),
+        countActiveSubscriptions(annualPriceId),
+      ]);
     } catch (e) {
-      console.error('Stripe charges fetch failed, using Prisma fallback', e);
+      console.error('Stripe subscriptions fetch failed, using Prisma fallback', e);
     }
   }
+
+  const purchaseRevenue = totalPurchaseRevenue._sum.amount || 0;
+  const mrrTotal = monthlyActive * 22 + annualActive * (200 / 12);
 
   return NextResponse.json({
     subscriptions,
     formationPurchases,
     courseRentals,
     stats: {
-      monthlyActive: monthlySubs,
-      annualActive: annualSubs,
+      monthlyActive,
+      annualActive,
       totalFormationPurchases: formationPurchases.length,
       formationRevenue: formationPurchases.reduce((sum, p) => sum + p.amount, 0),
       totalCourseRentals: courseRentals.length,
       courseRentalRevenue: courseRentals.reduce((sum, p) => sum + p.amount, 0),
-      totalRevenue,
+      totalRevenue: purchaseRevenue + mrrTotal,
     },
     pagination: {
       page,
