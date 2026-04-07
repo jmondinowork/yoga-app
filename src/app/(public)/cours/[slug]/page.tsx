@@ -1,20 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import dynamic from "next/dynamic";
 import { Clock, Tag, ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import CourseCard from "@/components/courses/CourseCard";
 import PurchaseButton from "@/components/courses/PurchaseButton";
+import VideoPlayer from "@/components/courses/VideoPlayer";
 
-const VideoPlayer = dynamic(() => import("@/components/courses/VideoPlayer"), {
-  ssr: false,
-  loading: () => (
-    <div className="aspect-video bg-primary/30 rounded-2xl animate-pulse" />
-  ),
-});
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { canAccessCourse, getCourseRentalExpiry, hasActiveSubscription } from "@/lib/helpers/access";
