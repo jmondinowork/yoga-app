@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod/v4";
@@ -84,6 +85,7 @@ export async function PUT(req: NextRequest) {
 
     if (ops.length > 0) {
       await prisma.$transaction(ops);
+      revalidateTag("cms", "max");
     }
 
     return NextResponse.json({ success: true });

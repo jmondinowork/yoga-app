@@ -19,16 +19,19 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function FormationsPage() {
-  const formations = await prisma.formation.findMany({
-    where: { isPublished: true },
-    orderBy: { createdAt: "desc" },
-    include: {
-      videos: {
-        orderBy: { sortOrder: "asc" },
-        select: { duration: true },
+  const [formations, c] = await Promise.all([
+    prisma.formation.findMany({
+      where: { isPublished: true },
+      orderBy: { createdAt: "desc" },
+      include: {
+        videos: {
+          orderBy: { sortOrder: "asc" },
+          select: { duration: true },
+        },
       },
-    },
-  });
+    }),
+    getContents(["formations_heading", "formations_description"]),
+  ]);
 
   const formattedFormations = await Promise.all(
     formations.map(async (f) => {
@@ -60,10 +63,10 @@ export default async function FormationsPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="mb-10">
         <h1 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
-          Formations
+          {c["formations_heading"] || "Formations"}
         </h1>
         <p className="text-lg text-text max-w-2xl">
-          Des programmes exclusifs avec vidéos, livret PDF et un accompagnement personnalisé d&apos;un an avec Mathilde Torrez pour progresser étape par étape.
+          {c["formations_description"] || "Des programmes exclusifs avec vid\u00e9os, livret PDF et un accompagnement personnalis\u00e9 d\u2019un an avec Mathilde Torrez pour progresser \u00e9tape par \u00e9tape."}
         </p>
       </div>
 

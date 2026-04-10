@@ -3,10 +3,12 @@ import Link from "next/link";
 import { ArrowRight, Award, Heart, BookOpen, Star } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { getContents } from "@/lib/content";
+import { getPresignedUrl } from "@/lib/r2";
 
 export const revalidate = 120;
 
 const ABOUT_KEYS = [
+  "image_about_portrait",
   "about_hero_label",
   "about_hero_heading",
   "about_hero_intro",
@@ -42,6 +44,12 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AProposPage() {
   const c = await getContents(ABOUT_KEYS);
 
+  const portraitUrl = c["image_about_portrait"]
+    ? c["image_about_portrait"].startsWith("http")
+      ? c["image_about_portrait"]
+      : await getPresignedUrl(c["image_about_portrait"], 7200)
+    : null;
+
   return (
     <>
       {/* Hero */}
@@ -64,8 +72,12 @@ export default async function AProposPage() {
             <div className="flex items-center justify-center">
               <div className="relative w-80 h-96">
                 <div className="absolute inset-0 bg-gradient-to-br from-button/20 to-primary/40 rounded-3xl rotate-3" />
-                <div className="absolute inset-2 bg-card rounded-3xl -rotate-1 flex items-center justify-center shadow-lg">
-                  <span className="text-8xl">🧘‍♀️</span>
+                <div className="absolute inset-2 bg-card rounded-3xl -rotate-1 flex items-center justify-center shadow-lg overflow-hidden">
+                  {portraitUrl ? (
+                    <img src={portraitUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-8xl">🧘‍♀️</span>
+                  )}
                 </div>
               </div>
             </div>

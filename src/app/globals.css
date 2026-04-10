@@ -1,18 +1,5 @@
 @import "tailwindcss";
 
-:root {
-  --color-primary: #F8E8C3;
-  --color-background: #FFF9EE;
-  --color-heading: #2B2A28;
-  --color-text: #4B463A;
-  --color-button: #0E7C78;
-  --color-button-text: #FFFFFF;
-  --color-border: #E8DCC8;
-  --color-card: #FFFFFF;
-  --color-muted: #8A8279;
-  --color-accent-light: #E6F5F4;
-}
-
 @theme inline {
   --color-primary: var(--color-primary);
   --color-background: var(--color-background);

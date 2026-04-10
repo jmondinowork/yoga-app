@@ -104,6 +104,8 @@ export default async function HomePage() {
       "homepage_cta_subtitle",
       "homepage_calendar_heading",
       "homepage_calendar_subtitle",
+      "image_homepage_hero",
+      "image_homepage_about",
     ]),
     prisma.liveEvent.findMany({
       where: { isPublished: true, startTime: { gte: new Date() } },
@@ -184,6 +186,18 @@ export default async function HomePage() {
   const stat3Num = stat3[0];
   const stat3Label = stat3.slice(1).join(" ");
 
+  // Resolve presigned URLs for CMS images
+  const heroImageUrl = c["image_homepage_hero"]
+    ? c["image_homepage_hero"].startsWith("http")
+      ? c["image_homepage_hero"]
+      : await getPresignedUrl(c["image_homepage_hero"], 7200)
+    : null;
+  const aboutImageUrl = c["image_homepage_about"]
+    ? c["image_homepage_about"].startsWith("http")
+      ? c["image_homepage_about"]
+      : await getPresignedUrl(c["image_homepage_about"], 7200)
+    : null;
+
   return (
     <>
       {/* ═══ HERO SECTION ═══ */}
@@ -251,13 +265,17 @@ export default async function HomePage() {
             <div className="hidden lg:flex items-center justify-center">
               <div className="relative w-[480px] h-[480px]">
                 <div className="absolute inset-0 bg-gradient-to-br from-button/20 to-primary/40 rounded-[3rem] rotate-3" />
-                <div className="absolute inset-4 bg-gradient-to-br from-accent-light/50 to-card rounded-[2.5rem] -rotate-2 flex items-center justify-center">
-                  <div className="text-center space-y-4">
-                    <span className="text-8xl">🧘‍♀️</span>
-                    <p className="font-heading text-xl text-heading/60">
-                      Votre espace de sérénité
-                    </p>
-                  </div>
+                <div className="absolute inset-4 bg-gradient-to-br from-accent-light/50 to-card rounded-[2.5rem] -rotate-2 flex items-center justify-center overflow-hidden">
+                  {heroImageUrl ? (
+                    <img src={heroImageUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="text-center space-y-4">
+                      <span className="text-8xl">🧘‍♀️</span>
+                      <p className="font-heading text-xl text-heading/60">
+                        Votre espace de sérénité
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -272,9 +290,13 @@ export default async function HomePage() {
             {/* Photo placeholder */}
             <div className="relative">
               <div className="aspect-[4/5] rounded-3xl bg-gradient-to-br from-primary/60 to-accent-light/40 overflow-hidden">
-                <div className="w-full h-full flex items-center justify-center">
-                  <span className="text-9xl opacity-40">🙏</span>
-                </div>
+                {aboutImageUrl ? (
+                  <img src={aboutImageUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-9xl opacity-40">🙏</span>
+                  </div>
+                )}
               </div>
               <div className="absolute -bottom-6 -right-6 bg-button text-white p-6 rounded-2xl shadow-lg">
                 <p className="font-heading text-3xl font-bold">10+</p>

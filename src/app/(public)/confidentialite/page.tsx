@@ -2,10 +2,14 @@ import type { Metadata } from "next";
 import { getContent, getContents } from "@/lib/content";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const c = await getContents(["seo_privacy_title", "seo_privacy_description"]);
+  const c = await getContents(["seo_privacy_title", "seo_privacy_description", "seo_privacy_keywords", "seo_privacy_og_title", "seo_privacy_og_description"]);
+  const title = c["seo_privacy_title"] || "Politique de confidentialité — Prana Motion Yoga";
+  const description = c["seo_privacy_description"] || "Politique de confidentialité du site Prana Motion Yoga.";
   return {
-    title: c["seo_privacy_title"] || "Politique de confidentialité — Prana Motion Yoga",
-    description: c["seo_privacy_description"] || "Politique de confidentialité du site Prana Motion Yoga.",
+    title,
+    description,
+    ...(c["seo_privacy_keywords"] ? { keywords: c["seo_privacy_keywords"].split(",").map((k: string) => k.trim()) } : {}),
+    openGraph: { title: c["seo_privacy_og_title"] || title, description: c["seo_privacy_og_description"] || description },
     robots: { index: false, follow: true },
   };
 }

@@ -307,6 +307,93 @@ function ColorRow({
 }
 
 // ---------------------------------------------------------------------------
+// Shared sub-components (defined outside to avoid re-mount on every render)
+// ---------------------------------------------------------------------------
+
+function LabeledTextarea({
+  label,
+  rows = 3,
+  ...rest
+}: {
+  label: string;
+  rows?: number;
+  value: string;
+  placeholder?: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-heading">{label}</label>
+      <textarea
+        rows={rows}
+        className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-button resize-y"
+        {...rest}
+      />
+    </div>
+  );
+}
+
+function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="bg-primary/5 rounded-xl border border-border/50 p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-heading text-lg font-semibold text-heading">{title}</h3>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SaveBar({ tab, onSave, isSaving, feedback }: {
+  tab: string;
+  onSave: () => void;
+  isSaving: boolean;
+  feedback?: { type: "success" | "error"; text: string };
+}) {
+  return (
+    <div className="flex items-center justify-between pt-4">
+      <div>
+        {feedback && (
+          <p className={`text-sm ${feedback.type === "success" ? "text-green-600" : "text-red-500"}`}>
+            {feedback.text}
+          </p>
+        )}
+      </div>
+      <Button onClick={onSave} loading={isSaving} disabled={isSaving}>
+        <Save className="w-4 h-4" />
+        Enregistrer
+      </Button>
+    </div>
+  );
+}
+
+function CharCounter({ value, max, label }: { value: string; max: number; label?: string }) {
+  const len = value?.length || 0;
+  const color = len === 0 ? "text-muted" : len <= max ? "text-green-600" : "text-red-500";
+  return (
+    <span className={`text-xs ${color}`}>
+      {label && `${label} : `}{len}/{max}
+    </span>
+  );
+}
+
+function GooglePreview({ title, description, path, siteUrl }: { title: string; description: string; path: string; siteUrl: string }) {
+  const displayTitle = title || "Titre de la page";
+  const displayDesc = description || "Description de la page pour les moteurs de recherche...";
+  return (
+    <div className="mt-3 p-4 bg-white rounded-lg border border-border/50">
+      <p className="text-xs text-muted mb-1">Aperçu Google</p>
+      <div className="space-y-0.5">
+        <p className="text-xs text-green-700 truncate">{siteUrl}{path}</p>
+        <p className="text-[16px] text-blue-700 font-medium leading-snug truncate">{displayTitle.slice(0, 60)}</p>
+        <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{displayDesc.slice(0, 160)}</p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -366,6 +453,59 @@ export default function AdminContenuPage() {
         delete next[tab];
         return next;
       }), 4000);
+    }
+  }
+
+  /** Apply color & font overrides to the live page without reloading */
+  function applyThemeLive(entries: Record<string, string>) {
+    const root = document.documentElement;
+    // Colors
+    for (const c of DEFAULT_COLORS) {
+      const val = entries[c.key];
+      if (val !== undefined) {
+        root.style.setProperty(`--color-${c.key.replace("color_", "")}`, val);
+      }
+    }
+    // Fonts
+    if (entries["font_heading"]) {
+      const name = entries["font_heading"];
+      loadGoogleFont(name);
+      root.style.setProperty("--font-heading", `"${name}", serif`);
+    }
+    if (entries["font_body"]) {
+      const name = entries["font_body"];
+      loadGoogleFont(name);
+      root.style.setProperty("--font-body", `"${name}", sans-serif`);
+    }
+  }
+
+  function loadGoogleFont(fontName: string) {
+    const id = `gf-live-${fontName.replace(/\s+/g, "-")}`;
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName)}:wght@400;500;600;700&display=swap`;
+    document.head.appendChild(link);
+  }
+
+  async function uploadImage(file: File, imageKey: string, contentKey: string, tab: string) {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", "site-image");
+      formData.append("imageKey", imageKey);
+      const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
+      if (res.ok) {
+        const data = await res.json();
+        setContent(prev => ({ ...prev, [contentKey]: data.key }));
+        if (data.url) setImageUrls(prev => ({ ...prev, [data.key]: data.url }));
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showFeedback(tab, "error", data.error || "Erreur lors de l'upload de l'image");
+      }
+    } catch {
+      showFeedback(tab, "error", "Erreur réseau lors de l'upload");
     }
   }
 
@@ -462,9 +602,8 @@ export default function AdminContenuPage() {
       });
       if (res.ok) {
         showFeedback(tab, "success", "Modifications enregistrées ✓");
-        if (tab === "apparence") {
-          setTimeout(() => window.location.reload(), 800);
-        }
+        // Apply color & font changes live without reloading
+        applyThemeLive(entries);
       } else {
         const data = await res.json().catch(() => ({}));
         showFeedback(tab, "error", data.error || "Erreur lors de la sauvegarde");
@@ -564,70 +703,7 @@ export default function AdminContenuPage() {
     setConfirmDeleteId(null);
   }
 
-  // ---------------------------------------------------------------------------
-  // Textarea helper component
-  // ---------------------------------------------------------------------------
 
-  function LabeledTextarea({
-    label,
-    rows = 3,
-    ...rest
-  }: {
-    label: string;
-    rows?: number;
-    value: string;
-    placeholder?: string;
-    onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  }) {
-    return (
-      <div className="space-y-1.5">
-        <label className="block text-sm font-medium text-heading">{label}</label>
-        <textarea
-          rows={rows}
-          className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-text focus:outline-none focus:ring-2 focus:ring-button resize-y"
-          {...rest}
-        />
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Section card wrapper
-  // ---------------------------------------------------------------------------
-
-  function SectionCard({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
-    return (
-      <div className="bg-primary/5 rounded-xl border border-border/50 p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-heading text-lg font-semibold text-heading">{title}</h3>
-          {action}
-        </div>
-        {children}
-      </div>
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Save button + feedback
-  // ---------------------------------------------------------------------------
-
-  function SaveBar({ tab, onSave }: { tab: string; onSave: () => void }) {
-    return (
-      <div className="flex items-center justify-between pt-4">
-        <div>
-          {feedback[tab] && (
-            <p className={`text-sm ${feedback[tab].type === "success" ? "text-green-600" : "text-red-500"}`}>
-              {feedback[tab].text}
-            </p>
-          )}
-        </div>
-        <Button onClick={onSave} loading={saving[tab]} disabled={saving[tab]}>
-          <Save className="w-4 h-4" />
-          Enregistrer
-        </Button>
-      </div>
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Loading state
@@ -703,16 +779,7 @@ export default function AdminContenuPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const formData = new FormData();
-                      formData.append("file", file);
-                      formData.append("type", "site-image");
-                      formData.append("imageKey", "homepage-hero");
-                      const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
-                      if (res.ok) {
-                        const data = await res.json();
-                        setContent(prev => ({ ...prev, image_homepage_hero: data.key }));
-                        if (data.url) setImageUrls(prev => ({ ...prev, [data.key]: data.url }));
-                      }
+                      await uploadImage(file, "homepage-hero", "image_homepage_hero", "accueil");
                     }}
                   />
                 </label>
@@ -743,16 +810,7 @@ export default function AdminContenuPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const formData = new FormData();
-                      formData.append("file", file);
-                      formData.append("type", "site-image");
-                      formData.append("imageKey", "homepage-about");
-                      const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
-                      if (res.ok) {
-                        const data = await res.json();
-                        setContent(prev => ({ ...prev, image_homepage_about: data.key }));
-                        if (data.url) setImageUrls(prev => ({ ...prev, [data.key]: data.url }));
-                      }
+                      await uploadImage(file, "homepage-about", "image_homepage_about", "accueil");
                     }}
                   />
                 </label>
@@ -808,7 +866,7 @@ export default function AdminContenuPage() {
           <LabeledTextarea label="Sous-titre" {...field("calendrier_page_subtitle", "Rejoignez Mathilde en direct sur Zoom...")} />
         </SectionCard>
 
-        <SaveBar tab="accueil" onSave={() => saveContent("accueil", ACCUEIL_KEYS)} />
+        <SaveBar tab="accueil" onSave={() => saveContent("accueil", ACCUEIL_KEYS)} isSaving={!!saving["accueil"]} feedback={feedback["accueil"]} />
       </div>
     );
   }
@@ -858,16 +916,7 @@ export default function AdminContenuPage() {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const formData = new FormData();
-                    formData.append("file", file);
-                    formData.append("type", "site-image");
-                    formData.append("imageKey", "about-portrait");
-                    const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
-                    if (res.ok) {
-                      const data = await res.json();
-                      setContent(prev => ({ ...prev, image_about_portrait: data.key }));
-                      if (data.url) setImageUrls(prev => ({ ...prev, [data.key]: data.url }));
-                    }
+                    await uploadImage(file, "about-portrait", "image_about_portrait", "a-propos");
                   }}
                 />
               </label>
@@ -904,7 +953,7 @@ export default function AdminContenuPage() {
           </div>
         </SectionCard>
 
-        <SaveBar tab="a-propos" onSave={() => saveContent("a-propos", ABOUT_KEYS)} />
+        <SaveBar tab="a-propos" onSave={() => saveContent("a-propos", ABOUT_KEYS)} isSaving={!!saving["a-propos"]} feedback={feedback["a-propos"]} />
       </div>
     );
   }
@@ -977,7 +1026,7 @@ export default function AdminContenuPage() {
           <p className="text-xs text-muted">Les icônes réseaux sociaux s&apos;affichent dans le footer uniquement si un lien est renseigné.</p>
         </SectionCard>
 
-        <SaveBar tab="pages" onSave={() => saveContent("pages", PAGES_KEYS)} />
+        <SaveBar tab="pages" onSave={() => saveContent("pages", PAGES_KEYS)} isSaving={!!saving["pages"]} feedback={feedback["pages"]} />
       </div>
     );
   }
@@ -1133,7 +1182,7 @@ export default function AdminContenuPage() {
           ))}
         </div>
 
-        <SaveBar tab="temoignages" onSave={saveTestimonials} />
+        <SaveBar tab="temoignages" onSave={saveTestimonials} isSaving={!!saving["temoignages"]} feedback={feedback["temoignages"]} />
       </div>
     );
   }
@@ -1284,7 +1333,7 @@ export default function AdminContenuPage() {
           ? renderFaqSection("homepage", "FAQ Accueil")
           : renderFaqSection("pricing", "FAQ Tarifs")}
 
-        <SaveBar tab="faq" onSave={saveFaq} />
+        <SaveBar tab="faq" onSave={saveFaq} isSaving={!!saving["faq"]} feedback={feedback["faq"]} />
       </div>
     );
   }
@@ -1319,7 +1368,7 @@ export default function AdminContenuPage() {
           </SectionCard>
         ))}
 
-        <SaveBar tab="legal" onSave={() => saveContent("legal", LEGAL_KEYS)} />
+        <SaveBar tab="legal" onSave={() => saveContent("legal", LEGAL_KEYS)} isSaving={!!saving["legal"]} feedback={feedback["legal"]} />
       </div>
     );
   }
@@ -1333,6 +1382,7 @@ export default function AdminContenuPage() {
     { label: "À propos", prefix: "seo_about", path: "/a-propos" },
     { label: "Cours", prefix: "seo_courses", path: "/cours" },
     { label: "Formations", prefix: "seo_formations", path: "/formations" },
+    { label: "Cours en ligne", prefix: "seo_calendrier", path: "/cours-en-ligne" },
     { label: "Tarifs", prefix: "seo_pricing", path: "/tarifs" },
     { label: "Mentions légales", prefix: "seo_mentions", path: "/mentions-legales" },
     { label: "CGV", prefix: "seo_cgv", path: "/cgv" },
@@ -1360,32 +1410,6 @@ export default function AdminContenuPage() {
       `${p.prefix}_og_description`,
     ]),
   ];
-
-  function CharCounter({ value, max, label }: { value: string; max: number; label?: string }) {
-    const len = value?.length || 0;
-    const color = len === 0 ? "text-muted" : len <= max ? "text-green-600" : "text-red-500";
-    return (
-      <span className={`text-xs ${color}`}>
-        {label && `${label} : `}{len}/{max}
-      </span>
-    );
-  }
-
-  function GooglePreview({ title, description, path }: { title: string; description: string; path: string }) {
-    const siteUrl = content["seo_site_url"] || "https://www.pranamotion.fr";
-    const displayTitle = title || "Titre de la page";
-    const displayDesc = description || "Description de la page pour les moteurs de recherche...";
-    return (
-      <div className="mt-3 p-4 bg-white rounded-lg border border-border/50">
-        <p className="text-xs text-muted mb-1">Aperçu Google</p>
-        <div className="space-y-0.5">
-          <p className="text-xs text-green-700 truncate">{siteUrl}{path}</p>
-          <p className="text-[16px] text-blue-700 font-medium leading-snug truncate">{displayTitle.slice(0, 60)}</p>
-          <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{displayDesc.slice(0, 160)}</p>
-        </div>
-      </div>
-    );
-  }
 
   function renderSeo() {
     return (
@@ -1482,16 +1506,7 @@ export default function AdminContenuPage() {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const formData = new FormData();
-                    formData.append("file", file);
-                    formData.append("type", "site-image");
-                    formData.append("imageKey", "og-default");
-                    const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
-                    if (res.ok) {
-                      const data = await res.json();
-                      setContent(prev => ({ ...prev, seo_og_image: data.key }));
-                      if (data.url) setImageUrls(prev => ({ ...prev, [data.key]: data.url }));
-                    }
+                    await uploadImage(file, "og-default", "seo_og_image", "seo");
                   }}
                 />
               </label>
@@ -1581,6 +1596,7 @@ export default function AdminContenuPage() {
                         title={titleVal || content["seo_site_name"] || "Prana Motion Yoga"}
                         description={descVal || content["seo_site_description"] || ""}
                         path={page.path}
+                        siteUrl={content["seo_site_url"] || "https://www.pranamotion.fr"}
                       />
                     </div>
                   )}
@@ -1590,7 +1606,7 @@ export default function AdminContenuPage() {
           </div>
         </SectionCard>
 
-        <SaveBar tab="seo" onSave={() => saveContent("seo", SEO_KEYS)} />
+        <SaveBar tab="seo" onSave={() => saveContent("seo", SEO_KEYS)} isSaving={!!saving["seo"]} feedback={feedback["seo"]} />
       </div>
     );
   }
@@ -1648,16 +1664,7 @@ export default function AdminContenuPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const formData = new FormData();
-                      formData.append("file", file);
-                      formData.append("type", "site-image");
-                      formData.append("imageKey", "site-logo");
-                      const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
-                      if (res.ok) {
-                        const data = await res.json();
-                        setContent(prev => ({ ...prev, site_logo: data.key }));
-                        if (data.url) setImageUrls(prev => ({ ...prev, [data.key]: data.url }));
-                      }
+                      await uploadImage(file, "site-logo", "site_logo", "apparence");
                     }}
                   />
                 </label>
@@ -1690,16 +1697,7 @@ export default function AdminContenuPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      const formData = new FormData();
-                      formData.append("file", file);
-                      formData.append("type", "site-image");
-                      formData.append("imageKey", "site-favicon");
-                      const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
-                      if (res.ok) {
-                        const data = await res.json();
-                        setContent(prev => ({ ...prev, site_favicon: data.key }));
-                        if (data.url) setImageUrls(prev => ({ ...prev, [data.key]: data.url }));
-                      }
+                      await uploadImage(file, "site-favicon", "site_favicon", "apparence");
                     }}
                   />
                 </label>
@@ -1750,7 +1748,7 @@ export default function AdminContenuPage() {
           </div>
         </SectionCard>
 
-        <SaveBar tab="apparence" onSave={() => saveContent("apparence", APPARENCE_KEYS)} />
+        <SaveBar tab="apparence" onSave={() => saveContent("apparence", APPARENCE_KEYS)} isSaving={!!saving["apparence"]} feedback={feedback["apparence"]} />
       </div>
     );
   }

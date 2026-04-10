@@ -87,7 +87,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const colorKeys = Object.keys(colorDefaults);
-  const customValues = await getContents(colorKeys);
+  const customValues = await getContents([
+    ...colorKeys,
+    "font_heading",
+    "font_body",
+    "site_favicon",
+  ]);
 
   const cssOverrides = Object.entries(colorDefaults)
     .map(([key, defaultVal]) => {
@@ -97,14 +102,46 @@ export default async function RootLayout({
     })
     .join(" ");
 
+  // Dynamic fonts: override CSS variables when admin picks custom fonts
+  const customHeadingFont = customValues["font_heading"];
+  const customBodyFont = customValues["font_body"];
+  let fontOverrides = "";
+  const fontLinks: string[] = [];
+  if (customHeadingFont && customHeadingFont !== "Cormorant Garamond") {
+    fontOverrides += ` --font-heading: "${customHeadingFont}", serif;`;
+    fontLinks.push(`https://fonts.googleapis.com/css2?family=${encodeURIComponent(customHeadingFont)}:wght@400;500;600;700&display=swap`);
+  }
+  if (customBodyFont && customBodyFont !== "DM Sans") {
+    fontOverrides += ` --font-body: "${customBodyFont}", sans-serif;`;
+    fontLinks.push(`https://fonts.googleapis.com/css2?family=${encodeURIComponent(customBodyFont)}:wght@400;500;600;700&display=swap`);
+  }
+
+  // Favicon: resolve presigned URL if stored in R2
+  const faviconKey = customValues["site_favicon"];
+  let faviconUrl: string | undefined;
+  if (faviconKey) {
+    if (faviconKey.startsWith("http")) {
+      faviconUrl = faviconKey;
+    } else {
+      try {
+        const { getPresignedUrl } = await import("@/lib/r2");
+        faviconUrl = await getPresignedUrl(faviconKey, 86400);
+      } catch { /* ignore */ }
+    }
+  }
+
   return (
     <html lang="fr">
       <head>
+        {fontLinks.map((href) => (
+          <link key={href} rel="stylesheet" href={href} />
+        ))}
         <style
           dangerouslySetInnerHTML={{
-            __html: `:root { ${cssOverrides} }`,
+            __html: `:root { ${cssOverrides}${fontOverrides} }`,
           }}
         />
+        {faviconUrl && <link rel="icon" href={faviconUrl} />}
       </head>
       <body
         className={`${cormorant.variable} ${dmSans.variable} antialiased`}

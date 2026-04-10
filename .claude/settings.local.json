@@ -17,7 +17,15 @@
       "Read(//Users/jmondino/DVP/Perso/yoga-app/$HOME/**)",
       "Read(//Users/jmondino/.config/herd-lite/bin/**)",
       "Read(//usr/local/bin/**)",
-      "Bash(PATH=\"/usr/local/bin:$PATH\")"
+      "Bash(PATH=\"/usr/local/bin:$PATH\")",
+      "Bash(export PATH=\"/usr/local/Cellar/node/23.9.0/bin:/usr/local/bin:$PATH\")",
+      "Bash(ls -la /Users/jmondino/DVP/Perso/yoga-app/.env*)",
+      "Bash(docker --version)",
+      "Bash(psql --version)",
+      "Bash(brew services:*)",
+      "Read(//usr/local/var/**)",
+      "Read(//opt/homebrew/**)",
+      "Bash(pg_isready)"
     ]
   }
 }
