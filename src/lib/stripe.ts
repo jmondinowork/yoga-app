@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { prisma } from "@/lib/prisma";
 
 // Mode démo : actif quand STRIPE_DEMO=true (simuler les paiements sans appeler Stripe)
 export const SIMULATE_PAYMENTS = process.env.STRIPE_DEMO === "true";
@@ -28,13 +29,9 @@ export const stripe = new Proxy({} as Stripe, {
   },
 });
 
-export const PLANS = [
-  {
-    id: "monthly",
-    name: "Mensuel",
-    price: 22,
-    priceId: process.env.STRIPE_MONTHLY_PRICE_ID || "",
-    interval: "month" as const,
+// Métadonnées statiques des plans (features, descriptions — ne changent pas avec le prix)
+const PLAN_METADATA: Record<string, { description: string; features: string[]; badge?: string }> = {
+  monthly: {
     description: "Accès illimité à tous les cours",
     features: [
       "Accès à tous les cours",
@@ -43,12 +40,7 @@ export const PLANS = [
       "Annulation à tout moment",
     ],
   },
-  {
-    id: "annual",
-    name: "Annuel",
-    price: 200,
-    priceId: process.env.STRIPE_ANNUAL_PRICE_ID || "",
-    interval: "year" as const,
+  annual: {
     description: "Le meilleur tarif",
     features: [
       "Tout le plan mensuel",
@@ -58,4 +50,48 @@ export const PLANS = [
     ],
     badge: "Meilleure offre",
   },
-] as const;
+};
+
+// Fallback si la DB n'est pas accessible
+export const PLANS_FALLBACK = [
+  {
+    id: "monthly",
+    name: "Mensuel",
+    price: 22,
+    priceId: process.env.STRIPE_MONTHLY_PRICE_ID || "",
+    interval: "month" as const,
+    ...PLAN_METADATA.monthly,
+  },
+  {
+    id: "annual",
+    name: "Annuel",
+    price: 200,
+    priceId: process.env.STRIPE_ANNUAL_PRICE_ID || "",
+    interval: "year" as const,
+    ...PLAN_METADATA.annual,
+  },
+];
+
+export type Plan = typeof PLANS_FALLBACK[number];
+
+/** Récupère les plans tarifaires depuis la DB (avec fallback env vars) */
+export async function getPlans(): Promise<Plan[]> {
+  try {
+    const dbPlans = await prisma.pricingPlan.findMany({
+      orderBy: { slug: "asc" },
+    });
+    if (dbPlans.length > 0) {
+      return dbPlans.map((p) => ({
+        id: p.slug,
+        name: p.name,
+        price: p.price,
+        priceId: p.stripePriceId,
+        interval: p.slug === "annual" ? ("year" as const) : ("month" as const),
+        ...(PLAN_METADATA[p.slug] || { description: "", features: [] }),
+      }));
+    }
+  } catch {
+    // DB pas accessible, fallback
+  }
+  return PLANS_FALLBACK;
+}

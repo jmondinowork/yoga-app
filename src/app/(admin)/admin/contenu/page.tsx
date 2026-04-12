@@ -25,6 +25,9 @@ import {
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
+import { compressImage } from "@/lib/helpers/compress-image";
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 Mo
 
 // ---------------------------------------------------------------------------
 // Types
@@ -428,6 +431,12 @@ export default function AdminContenuPage() {
   // Presigned URLs for image previews (R2 key -> displayable URL)
   const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
 
+  // Track which image key is currently uploading
+  const [uploadingImage, setUploadingImage] = useState<string | null>(null);
+
+  // Track upload error per image key
+  const [imageError, setImageError] = useState<Record<string, string>>({});
+
   // SEO accordion expanded state
   const [seoExpandedPages, setSeoExpandedPages] = useState<Record<string, boolean>>({});
 
@@ -489,10 +498,20 @@ export default function AdminContenuPage() {
     document.head.appendChild(link);
   }
 
-  async function uploadImage(file: File, imageKey: string, contentKey: string, tab: string) {
+  async function uploadImage(file: File, imageKey: string, contentKey: string) {
+    setImageError(prev => { const next = { ...prev }; delete next[imageKey]; return next; });
+    setUploadingImage(imageKey);
     try {
+      // Compress/resize bitmap images before upload
+      const compressed = await compressImage(file);
+
+      if (compressed.size > MAX_IMAGE_SIZE) {
+        setImageError(prev => ({ ...prev, [imageKey]: `L'image est trop lourde (${(compressed.size / 1024 / 1024).toFixed(1)} Mo après compression). Taille maximale : 5 Mo.` }));
+        return;
+      }
+
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", compressed);
       formData.append("type", "site-image");
       formData.append("imageKey", imageKey);
       const res = await fetch("/api/admin/upload", { method: "POST", body: formData });
@@ -502,10 +521,12 @@ export default function AdminContenuPage() {
         if (data.url) setImageUrls(prev => ({ ...prev, [data.key]: data.url }));
       } else {
         const data = await res.json().catch(() => ({}));
-        showFeedback(tab, "error", data.error || "Erreur lors de l'upload de l'image");
+        setImageError(prev => ({ ...prev, [imageKey]: data.error || "Erreur lors de l'upload de l'image" }));
       }
     } catch {
-      showFeedback(tab, "error", "Erreur réseau lors de l'upload");
+      setImageError(prev => ({ ...prev, [imageKey]: "Erreur réseau lors de l'upload" }));
+    } finally {
+      setUploadingImage(null);
     }
   }
 
@@ -768,6 +789,11 @@ export default function AdminContenuPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+              ) : uploadingImage === "homepage-hero" ? (
+                <div className="flex flex-col items-center justify-center w-full h-48 rounded-xl border-2 border-dashed border-border bg-background">
+                  <Loader2 className="w-8 h-8 text-muted mb-2 animate-spin" />
+                  <span className="text-sm text-muted">Upload en cours…</span>
+                </div>
               ) : (
                 <label className="flex flex-col items-center justify-center w-full h-48 rounded-xl border-2 border-dashed border-border bg-background hover:border-button cursor-pointer transition-colors">
                   <Upload className="w-8 h-8 text-muted mb-2" />
@@ -779,11 +805,12 @@ export default function AdminContenuPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      await uploadImage(file, "homepage-hero", "image_homepage_hero", "accueil");
+                      await uploadImage(file, "homepage-hero", "image_homepage_hero");
                     }}
                   />
                 </label>
               )}
+              {imageError["homepage-hero"] && <p className="text-sm text-red-500 mt-1">{imageError["homepage-hero"]}</p>}
             </div>
 
             <div className="space-y-2">
@@ -799,6 +826,11 @@ export default function AdminContenuPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+              ) : uploadingImage === "homepage-about" ? (
+                <div className="flex flex-col items-center justify-center w-full h-48 rounded-xl border-2 border-dashed border-border bg-background">
+                  <Loader2 className="w-8 h-8 text-muted mb-2 animate-spin" />
+                  <span className="text-sm text-muted">Upload en cours…</span>
+                </div>
               ) : (
                 <label className="flex flex-col items-center justify-center w-full h-48 rounded-xl border-2 border-dashed border-border bg-background hover:border-button cursor-pointer transition-colors">
                   <Upload className="w-8 h-8 text-muted mb-2" />
@@ -810,11 +842,12 @@ export default function AdminContenuPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      await uploadImage(file, "homepage-about", "image_homepage_about", "accueil");
+                      await uploadImage(file, "homepage-about", "image_homepage_about");
                     }}
                   />
                 </label>
               )}
+              {imageError["homepage-about"] && <p className="text-sm text-red-500 mt-1">{imageError["homepage-about"]}</p>}
             </div>
           </div>
         </SectionCard>
@@ -905,6 +938,11 @@ export default function AdminContenuPage() {
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
+            ) : uploadingImage === "about-portrait" ? (
+              <div className="flex flex-col items-center justify-center w-full h-48 rounded-xl border-2 border-dashed border-border bg-background">
+                <Loader2 className="w-8 h-8 text-muted mb-2 animate-spin" />
+                <span className="text-sm text-muted">Upload en cours…</span>
+              </div>
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-48 rounded-xl border-2 border-dashed border-border bg-background hover:border-button cursor-pointer transition-colors">
                 <Upload className="w-8 h-8 text-muted mb-2" />
@@ -916,11 +954,12 @@ export default function AdminContenuPage() {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    await uploadImage(file, "about-portrait", "image_about_portrait", "a-propos");
+                    await uploadImage(file, "about-portrait", "image_about_portrait");
                   }}
                 />
               </label>
             )}
+            {imageError["about-portrait"] && <p className="text-sm text-red-500 mt-1">{imageError["about-portrait"]}</p>}
           </div>
         </SectionCard>
 
@@ -1495,6 +1534,11 @@ export default function AdminContenuPage() {
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
+            ) : uploadingImage === "og-default" ? (
+              <div className="flex flex-col items-center justify-center w-full max-w-md h-40 rounded-xl border-2 border-dashed border-border bg-background">
+                <Loader2 className="w-8 h-8 text-muted mb-2 animate-spin" />
+                <span className="text-sm text-muted">Upload en cours…</span>
+              </div>
             ) : (
               <label className="flex flex-col items-center justify-center w-full max-w-md h-40 rounded-xl border-2 border-dashed border-border bg-background hover:border-button cursor-pointer transition-colors">
                 <Upload className="w-8 h-8 text-muted mb-2" />
@@ -1506,11 +1550,12 @@ export default function AdminContenuPage() {
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    await uploadImage(file, "og-default", "seo_og_image", "seo");
+                    await uploadImage(file, "og-default", "seo_og_image");
                   }}
                 />
               </label>
             )}
+            {imageError["og-default"] && <p className="text-sm text-red-500 mt-1">{imageError["og-default"]}</p>}
           </div>
         </SectionCard>
 
@@ -1653,6 +1698,11 @@ export default function AdminContenuPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+              ) : uploadingImage === "site-logo" ? (
+                <div className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-border bg-background">
+                  <Loader2 className="w-8 h-8 text-muted mb-2 animate-spin" />
+                  <span className="text-sm text-muted">Upload en cours…</span>
+                </div>
               ) : (
                 <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-border bg-background hover:border-button cursor-pointer transition-colors">
                   <Upload className="w-8 h-8 text-muted mb-2" />
@@ -1664,11 +1714,12 @@ export default function AdminContenuPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      await uploadImage(file, "site-logo", "site_logo", "apparence");
+                      await uploadImage(file, "site-logo", "site_logo");
                     }}
                   />
                 </label>
               )}
+              {imageError["site-logo"] && <p className="text-sm text-red-500 mt-1">{imageError["site-logo"]}</p>}
             </div>
 
             {/* Favicon */}
@@ -1686,6 +1737,11 @@ export default function AdminContenuPage() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+              ) : uploadingImage === "site-favicon" ? (
+                <div className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-border bg-background">
+                  <Loader2 className="w-8 h-8 text-muted mb-2 animate-spin" />
+                  <span className="text-sm text-muted">Upload en cours…</span>
+                </div>
               ) : (
                 <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-border bg-background hover:border-button cursor-pointer transition-colors">
                   <Upload className="w-8 h-8 text-muted mb-2" />
@@ -1697,11 +1753,12 @@ export default function AdminContenuPage() {
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      await uploadImage(file, "site-favicon", "site_favicon", "apparence");
+                      await uploadImage(file, "site-favicon", "site_favicon");
                     }}
                   />
                 </label>
               )}
+              {imageError["site-favicon"] && <p className="text-sm text-red-500 mt-1">{imageError["site-favicon"]}</p>}
             </div>
           </div>
         </SectionCard>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Role } from '@prisma/client';
+import { getPlans } from '@/lib/stripe';
 
 async function checkAdmin() {
   const session = await auth();
@@ -25,20 +26,8 @@ export async function GET(req: NextRequest) {
 
   const userFilter = { user: { role: Role.USER } };
 
-  const [
-    subscriptions,
-    subscriptionCount,
-    formationPurchases,
-    courseRentals,
-    purchaseCount,
-    monthlySubs,
-    annualSubs,
-    totalPurchaseRevenue,
-    totalFormationCount,
-    totalFormationRevenue,
-    totalCourseRentalCount,
-    totalCourseRentalRevenue,
-  ] = await Promise.all([
+  // Batch 1 – paginated data
+  const [subscriptions, formationPurchases, courseRentals] = await Promise.all([
     prisma.subscription.findMany({
       where: userFilter,
       select: {
@@ -50,7 +39,6 @@ export async function GET(req: NextRequest) {
       skip,
       take: limit,
     }),
-    prisma.subscription.count({ where: userFilter }),
     prisma.purchase.findMany({
       where: { ...userFilter, formationId: { not: null } },
       select: {
@@ -73,6 +61,21 @@ export async function GET(req: NextRequest) {
       skip,
       take: limit,
     }),
+  ]);
+
+  // Batch 2 – counts & aggregates (single transaction = single connection)
+  const [
+    subscriptionCount,
+    purchaseCount,
+    monthlySubs,
+    annualSubs,
+    totalPurchaseRevenue,
+    totalFormationCount,
+    totalFormationRevenue,
+    totalCourseRentalCount,
+    totalCourseRentalRevenue,
+  ] = await prisma.$transaction([
+    prisma.subscription.count({ where: userFilter }),
     prisma.purchase.count({ where: userFilter }),
     prisma.subscription.count({
       where: { plan: 'MONTHLY', status: 'ACTIVE', ...userFilter },
@@ -84,7 +87,6 @@ export async function GET(req: NextRequest) {
       _sum: { amount: true },
       where: userFilter,
     }),
-    // Stats globales (pas paginées)
     prisma.purchase.count({ where: { ...userFilter, formationId: { not: null } } }),
     prisma.purchase.aggregate({ _sum: { amount: true }, where: { ...userFilter, formationId: { not: null } } }),
     prisma.purchase.count({ where: { ...userFilter, courseId: { not: null } } }),
@@ -92,7 +94,10 @@ export async function GET(req: NextRequest) {
   ]);
 
   const purchaseRevenue = totalPurchaseRevenue._sum.amount || 0;
-  const mrrTotal = monthlySubs * 22 + annualSubs * (200 / 12);
+  const plans = await getPlans();
+  const monthlyPrice = plans.find(p => p.id === 'monthly')?.price || 22;
+  const annualPrice = plans.find(p => p.id === 'annual')?.price || 200;
+  const mrrTotal = monthlySubs * monthlyPrice + annualSubs * (annualPrice / 12);
 
   return NextResponse.json({
     subscriptions,
@@ -101,6 +106,8 @@ export async function GET(req: NextRequest) {
     stats: {
       monthlyActive: monthlySubs,
       annualActive: annualSubs,
+      monthlyPrice,
+      annualPrice,
       totalFormationPurchases: totalFormationCount,
       formationRevenue: totalFormationRevenue._sum.amount || 0,
       totalCourseRentals: totalCourseRentalCount,

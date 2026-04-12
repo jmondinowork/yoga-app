@@ -11,8 +11,64 @@ const tabs = [
   { id: "formations", label: "Formations" },
 ];
 
-export default function TarifsClient() {
+interface SubscriptionPlan {
+  name: string;
+  price: number;
+  interval: string;
+  planId: string;
+  badge?: string;
+}
+
+interface TarifsClientProps {
+  subscriptionPlans?: SubscriptionPlan[];
+}
+
+const defaultSubscriptionPlans: SubscriptionPlan[] = [
+  {
+    name: "Mensuel",
+    price: 22,
+    interval: "par mois",
+    planId: "monthly",
+  },
+  {
+    name: "Annuel",
+    price: 200,
+    interval: "par an",
+    badge: "Meilleure offre",
+    planId: "annual",
+  },
+];
+
+export default function TarifsClient({ subscriptionPlans = defaultSubscriptionPlans }: TarifsClientProps) {
   const [activeTab, setActiveTab] = useState<"cours" | "formations">("cours");
+
+  const monthlyPrice = subscriptionPlans.find(p => p.planId === "monthly")?.price || 22;
+
+  const coursPlans = [
+    {
+      name: "Location 72h",
+      price: 10,
+      interval: "par cours",
+      description: "Louez les cours qui vous intéressent",
+      features: [
+        "Accès 72h au cours loué",
+        "Suivi de progression",
+        "Accès depuis tous vos appareils",
+        "Pas d'engagement",
+      ],
+    },
+    ...subscriptionPlans.map((sp) => ({
+      name: sp.name,
+      price: sp.price,
+      interval: sp.interval,
+      description: sp.planId === "annual" ? "Le meilleur tarif" : "Accès illimité à tous les cours vidéo",
+      features: sp.planId === "annual"
+        ? ["Tous les cours vidéo en illimité", `Économisez ${Math.round(100 - (sp.price / (monthlyPrice * 12)) * 100)}%`, "Accès prioritaire aux nouveautés", "Suivi de progression"]
+        : ["Accès à tous les cours vidéo", "Nouvelles vidéos chaque semaine", "Suivi de progression", "Annulation à tout moment"],
+      badge: sp.badge,
+      planId: sp.planId,
+    })),
+  ];
 
   return (
     <>
@@ -37,7 +93,7 @@ export default function TarifsClient() {
 
       {/* Contenu */}
       {activeTab === "cours" ? (
-        <PricingTable />
+        <PricingTable plans={coursPlans} />
       ) : (
         <div className="max-w-2xl mx-auto text-center space-y-10">
           {/* Icône */}

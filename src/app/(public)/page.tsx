@@ -19,6 +19,7 @@ import CourseCard from "@/components/courses/CourseCard";
 import TestimonialCarousel from "@/components/home/TestimonialCarousel";
 import { getContents, getContent } from "@/lib/content";
 import { prisma } from "@/lib/prisma";
+import { getPlans } from "@/lib/stripe";
 
 const TarifsClient = dynamic(() => import("@/components/pricing/TarifsClient"), {
   loading: () => <div className="h-96 animate-pulse bg-primary/10 rounded-2xl" />,
@@ -81,7 +82,7 @@ const defaultFaqItems = [
 
 export default async function HomePage() {
   // Parallelize ALL independent DB queries
-  const [c, upcomingEvents, dbTestimonials, faqRaw, dbCourses, themeGroups] = await Promise.all([
+  const [c, upcomingEvents, dbTestimonials, faqRaw, dbCourses, themeGroups, dbPlans] = await Promise.all([
     getContents([
       "homepage_hero_badge",
       "homepage_hero_title",
@@ -133,6 +134,7 @@ export default async function HomePage() {
       where: { isPublished: true },
       _count: { _all: true },
     }),
+    getPlans(),
   ]);
 
   const testimonials = dbTestimonials.map((t) => ({
@@ -545,7 +547,13 @@ export default async function HomePage() {
             </p>
           </div>
 
-          <TarifsClient />
+          <TarifsClient subscriptionPlans={dbPlans.map((p) => ({
+            name: p.name,
+            price: p.price,
+            interval: p.interval === "year" ? "par an" : "par mois",
+            planId: p.id,
+            badge: "badge" in p ? (p as { badge?: string }).badge : undefined,
+          }))} />
         </div>
       </section>
 

@@ -9,10 +9,14 @@ import '../mocks/auth';
 // Mock stripe module to force simulation mode
 vi.mock('@/lib/stripe', () => ({
   SIMULATE_PAYMENTS: true,
-  PLANS: [
+  PLANS_FALLBACK: [
     { id: 'monthly', name: 'Mensuel', price: 22, priceId: '', interval: 'month' },
     { id: 'annual', name: 'Annuel', price: 200, priceId: '', interval: 'year', badge: 'Meilleure offre' },
   ],
+  getPlans: vi.fn().mockResolvedValue([
+    { id: 'monthly', name: 'Mensuel', price: 22, priceId: '', interval: 'month' },
+    { id: 'annual', name: 'Annuel', price: 200, priceId: '', interval: 'year', badge: 'Meilleure offre' },
+  ]),
   getStripe: vi.fn(),
   stripe: {},
 }));

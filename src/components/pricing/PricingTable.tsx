@@ -33,33 +33,6 @@ const defaultPlans: PricingPlan[] = [
       "Pas d'engagement",
     ],
   },
-  {
-    name: "Mensuel",
-    price: 22,
-    interval: "par mois",
-    description: "Accès illimité à tous les cours vidéo",
-    features: [
-      "Accès à tous les cours vidéo",
-      "Nouvelles vidéos chaque semaine",
-      "Suivi de progression",
-      "Annulation à tout moment",
-    ],
-    planId: "monthly",
-  },
-  {
-    name: "Annuel",
-    price: 200,
-    interval: "par an",
-    description: "Le meilleur tarif — économisez 24%",
-    features: [
-      "Tous les cours vidéo en illimité",
-      "Économisez 24%",
-      "Accès prioritaire aux nouveautés",
-      "Suivi de progression",
-    ],
-    badge: "Meilleure offre",
-    planId: "annual",
-  },
 ];
 
 export default function PricingTable({ plans = defaultPlans }: PricingTableProps) {

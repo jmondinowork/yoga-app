@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { auth } from '@/lib/auth';
-import { SIMULATE_PAYMENTS, stripe, PLANS } from '@/lib/stripe';
+import { SIMULATE_PAYMENTS, stripe, getPlans } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 import { rateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
@@ -15,7 +15,8 @@ async function handleSimulatedCheckout(
 ) {
   // Abonnement simulé
   if (type === 'subscription') {
-    const plan = PLANS.find((p) => p.id === planId);
+    const plans = await getPlans();
+    const plan = plans.find((p) => p.id === planId);
     if (!plan) {
       return NextResponse.json({ error: 'Plan introuvable.' }, { status: 400 });
     }
@@ -191,7 +192,8 @@ export async function POST(req: NextRequest) {
 
     // Abonnement
     if (type === 'subscription') {
-      const plan = PLANS.find((p) => p.id === planId);
+      const plans = await getPlans();
+      const plan = plans.find((p) => p.id === planId);
 
       if (!plan) {
         return NextResponse.json(

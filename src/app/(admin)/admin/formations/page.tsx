@@ -25,6 +25,7 @@ import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
+import { compressImage } from "@/lib/helpers/compress-image";
 
 interface FormationVideo {
   id?: string;
@@ -238,9 +239,10 @@ export default function AdminFormationsPage() {
 
       // Upload miniature
       if (thumbnailFile) {
-        setUploadProgress("Upload de la miniature...");
+        setUploadProgress("Compression et upload de la miniature...");
+        const compressed = await compressImage(thumbnailFile);
         const fd = new FormData();
-        fd.append("file", thumbnailFile);
+        fd.append("file", compressed);
         fd.append("type", "formation-thumbnail");
         fd.append("slug", form.slug);
         const res = await fetch("/api/admin/upload", { method: "POST", body: fd });

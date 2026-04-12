@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import TarifsClient from "@/components/pricing/TarifsClient";
 import Accordion from "@/components/ui/Accordion";
 import { getContents, getContent } from "@/lib/content";
+import { getPlans } from "@/lib/stripe";
 
 export const revalidate = 120;
 
@@ -51,6 +52,14 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function TarifsPage() {
   const c = await getContents(["pricing_heading", "pricing_description"]);
   const faqRaw = await getContent("faq_pricing", "[]");
+  const plans = await getPlans();
+  const subscriptionPlans = plans.map((p) => ({
+    name: p.name,
+    price: p.price,
+    interval: p.interval === "year" ? "par an" : "par mois",
+    planId: p.id,
+    badge: "badge" in p ? (p as { badge?: string }).badge : undefined,
+  }));
   let pricingFaq: { question: string; answer: string }[];
   try {
     const parsed = JSON.parse(faqRaw);
@@ -72,7 +81,7 @@ export default async function TarifsPage() {
       </div>
 
       {/* Tabs + contenu */}
-      <TarifsClient />
+      <TarifsClient subscriptionPlans={subscriptionPlans} />
 
       {/* FAQ */}
       <div className="mt-20 max-w-3xl mx-auto">

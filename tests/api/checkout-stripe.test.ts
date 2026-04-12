@@ -12,10 +12,14 @@ const stripeCheckoutCreate = vi.fn();
 
 vi.mock('@/lib/stripe', () => ({
   SIMULATE_PAYMENTS: false,
-  PLANS: [
+  PLANS_FALLBACK: [
     { id: 'monthly', name: 'Mensuel', price: 22, priceId: 'price_monthly_123', interval: 'month' },
     { id: 'annual', name: 'Annuel', price: 200, priceId: 'price_annual_456', interval: 'year', badge: 'Meilleure offre' },
   ],
+  getPlans: vi.fn().mockResolvedValue([
+    { id: 'monthly', name: 'Mensuel', price: 22, priceId: 'price_monthly_123', interval: 'month' },
+    { id: 'annual', name: 'Annuel', price: 200, priceId: 'price_annual_456', interval: 'year', badge: 'Meilleure offre' },
+  ]),
   getStripe: vi.fn(),
   stripe: {
     customers: { create: (...args: unknown[]) => stripeCustomersCreate(...args) },

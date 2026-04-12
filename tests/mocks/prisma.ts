@@ -86,6 +86,10 @@ export const prismaMock = {
     findUnique: vi.fn(),
     create: vi.fn(),
   },
+  pricingPlan: {
+    findMany: vi.fn(),
+    update: vi.fn(),
+  },
   siteContent: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -110,7 +114,9 @@ export const prismaMock = {
     delete: vi.fn(),
     count: vi.fn(),
   },
-  $transaction: vi.fn((fn: (tx: unknown) => unknown) => fn(prismaMock)),
+  $transaction: vi.fn((fn: unknown) =>
+    Array.isArray(fn) ? Promise.all(fn) : (fn as (tx: unknown) => unknown)(prismaMock)
+  ),
 };
 
 vi.mock('@/lib/prisma', () => ({

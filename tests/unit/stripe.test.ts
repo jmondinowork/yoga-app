@@ -18,21 +18,21 @@ describe('stripe config', () => {
     expect(SIMULATE_PAYMENTS).toBe(false);
   });
 
-  it('PLANS contient les plans mensuel et annuel', async () => {
+  it('PLANS_FALLBACK contient les plans mensuel et annuel', async () => {
     vi.stubEnv('STRIPE_DEMO', 'true');
-    const { PLANS } = await import('@/lib/stripe');
-    expect(PLANS).toHaveLength(2);
-    expect(PLANS[0].id).toBe('monthly');
-    expect(PLANS[1].id).toBe('annual');
-    expect(PLANS[0].price).toBe(22);
-    expect(PLANS[1].price).toBe(200);
+    const { PLANS_FALLBACK } = await import('@/lib/stripe');
+    expect(PLANS_FALLBACK).toHaveLength(2);
+    expect(PLANS_FALLBACK[0].id).toBe('monthly');
+    expect(PLANS_FALLBACK[1].id).toBe('annual');
+    expect(PLANS_FALLBACK[0].price).toBe(22);
+    expect(PLANS_FALLBACK[1].price).toBe(200);
   });
 
-  it('PLANS annuel a le badge "Meilleure offre"', async () => {
+  it('PLANS_FALLBACK annuel a le badge "Meilleure offre"', async () => {
     vi.stubEnv('STRIPE_DEMO', 'true');
-    const { PLANS } = await import('@/lib/stripe');
-    expect(PLANS[1].badge).toBe('Meilleure offre');
-    expect(PLANS[0]).not.toHaveProperty('badge');
+    const { PLANS_FALLBACK } = await import('@/lib/stripe');
+    expect(PLANS_FALLBACK[1].badge).toBe('Meilleure offre');
+    expect(PLANS_FALLBACK[0]).not.toHaveProperty('badge');
   });
 
   it('getStripe() lève une erreur en mode simulation', async () => {

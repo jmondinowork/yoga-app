@@ -290,6 +290,20 @@ model FAQ {
   updatedAt DateTime @updatedAt
 }
 
+// ─── Pricing Plans ─────────────────────────────────────────────────
+
+model PricingPlan {
+  id            String @id @default(cuid())
+  slug          String @unique // "monthly" | "annual"
+  name          String
+  price         Float
+  stripePriceId String
+  interval      String // "month" | "year"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // ─── Stripe webhook idempotency ────────────────────────────────────
 
 model StripeEvent {

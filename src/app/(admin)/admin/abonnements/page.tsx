@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CreditCard, Users, ShoppingBag, TrendingUp, BookOpen, Video, Clock } from "lucide-react";
+import { CreditCard, Users, ShoppingBag, TrendingUp, BookOpen, Video, Clock, Settings, Save, Loader2 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 
 interface Subscription {
@@ -27,11 +27,22 @@ interface Purchase {
 interface Stats {
   monthlyActive: number;
   annualActive: number;
+  monthlyPrice: number;
+  annualPrice: number;
   totalFormationPurchases: number;
   formationRevenue: number;
   totalCourseRentals: number;
   courseRentalRevenue: number;
   totalRevenue: number;
+}
+
+interface PricingPlan {
+  id: string;
+  slug: string;
+  name: string;
+  price: number;
+  stripePriceId: string;
+  interval: string;
 }
 
 const statusLabels: Record<string, string> = {
@@ -56,6 +67,7 @@ export default function AdminRevenusPage() {
   const [courseRentals, setCourseRentals] = useState<Purchase[]>([]);
   const [stats, setStats] = useState<Stats>({
     monthlyActive: 0, annualActive: 0,
+    monthlyPrice: 22, annualPrice: 200,
     totalFormationPurchases: 0, formationRevenue: 0,
     totalCourseRentals: 0, courseRentalRevenue: 0,
     totalRevenue: 0,
@@ -63,15 +75,33 @@ export default function AdminRevenusPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("monthly");
 
+  // Pricing plans state
+  const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>([]);
+  const [editedPlans, setEditedPlans] = useState<Record<string, { price: string; stripePriceId: string }>>({});
+  const [savingPlans, setSavingPlans] = useState(false);
+  const [planMessage, setPlanMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch("/api/admin/subscriptions");
-        const data = await res.json();
+        const [subsRes, pricingRes] = await Promise.all([
+          fetch("/api/admin/subscriptions"),
+          fetch("/api/admin/pricing"),
+        ]);
+        const data = await subsRes.json();
+        const pricingData = await pricingRes.json();
         setSubscriptions(data.subscriptions || []);
         setFormationPurchases(data.formationPurchases || []);
         setCourseRentals(data.courseRentals || []);
         setStats(data.stats || stats);
+        if (pricingData.plans) {
+          setPricingPlans(pricingData.plans);
+          const edited: Record<string, { price: string; stripePriceId: string }> = {};
+          for (const p of pricingData.plans) {
+            edited[p.slug] = { price: String(p.price), stripePriceId: p.stripePriceId };
+          }
+          setEditedPlans(edited);
+        }
       } catch {
         console.error("Erreur lors du chargement");
       } finally {
@@ -85,8 +115,8 @@ export default function AdminRevenusPage() {
   const monthlySubs = subscriptions.filter(s => s.plan === "MONTHLY");
   const annualSubs = subscriptions.filter(s => s.plan === "ANNUAL");
 
-  const mrrMonthly = stats.monthlyActive * 22;
-  const mrrAnnual = stats.annualActive * (200 / 12);
+  const mrrMonthly = stats.monthlyActive * stats.monthlyPrice;
+  const mrrAnnual = stats.annualActive * (stats.annualPrice / 12);
   const mrrTotal = mrrMonthly + mrrAnnual;
 
   const isRentalActive = (rental: Purchase) => {
@@ -101,6 +131,56 @@ export default function AdminRevenusPage() {
     { key: "rentals", label: "Locations", count: courseRentals.length },
   ];
 
+  const handlePlanChange = (slug: string, field: "price" | "stripePriceId", value: string) => {
+    setEditedPlans((prev) => ({
+      ...prev,
+      [slug]: { ...prev[slug], [field]: value },
+    }));
+    setPlanMessage(null);
+  };
+
+  const handleSavePlans = async () => {
+    setSavingPlans(true);
+    setPlanMessage(null);
+    try {
+      const plans = Object.entries(editedPlans).map(([slug, data]) => ({
+        slug,
+        price: parseFloat(data.price),
+        stripePriceId: data.stripePriceId,
+      }));
+
+      if (plans.some((p) => isNaN(p.price) || p.price < 0)) {
+        setPlanMessage({ type: "error", text: "Le prix doit être un nombre positif." });
+        return;
+      }
+
+      const res = await fetch("/api/admin/pricing", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plans }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Erreur lors de la sauvegarde");
+      }
+
+      const data = await res.json();
+      setPricingPlans(data.plans);
+      setPlanMessage({ type: "success", text: "Plans tarifaires mis à jour." });
+    } catch (err) {
+      setPlanMessage({ type: "error", text: err instanceof Error ? err.message : "Erreur inconnue" });
+    } finally {
+      setSavingPlans(false);
+    }
+  };
+
+  const hasChanges = pricingPlans.some((p) => {
+    const edited = editedPlans[p.slug];
+    if (!edited) return false;
+    return String(p.price) !== edited.price || p.stripePriceId !== edited.stripePriceId;
+  });
+
   return (
     <div className="space-y-8">
       <div>
@@ -108,6 +188,84 @@ export default function AdminRevenusPage() {
           Revenus
         </h1>
         <p className="text-muted">Abonnements, achats de formations et locations de cours</p>
+      </div>
+
+      {/* Plans tarifaires */}
+      <div className="bg-card rounded-2xl border border-border p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+            <Settings className="w-5 h-5 text-heading" />
+          </div>
+          <div>
+            <h2 className="font-heading text-lg font-bold text-heading">Plans tarifaires</h2>
+            <p className="text-xs text-muted">Modifiez les prix et identifiants Stripe après avoir mis à jour vos tarifs sur Stripe</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {pricingPlans.map((plan) => (
+            <div key={plan.slug} className="rounded-xl border border-border p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-heading font-bold text-heading">{plan.name}</h3>
+                <span className="text-xs text-muted bg-primary/20 px-2 py-1 rounded-lg">
+                  {plan.interval === "month" ? "Mensuel" : "Annuel"}
+                </span>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1">
+                    Prix d&apos;affichage (€)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editedPlans[plan.slug]?.price ?? ""}
+                    onChange={(e) => handlePlanChange(plan.slug, "price", e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-heading text-sm focus:outline-none focus:ring-2 focus:ring-button/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1">
+                    Stripe Price ID
+                  </label>
+                  <input
+                    type="text"
+                    value={editedPlans[plan.slug]?.stripePriceId ?? ""}
+                    onChange={(e) => handlePlanChange(plan.slug, "stripePriceId", e.target.value)}
+                    placeholder="price_..."
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-heading text-sm font-mono focus:outline-none focus:ring-2 focus:ring-button/50"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {planMessage && (
+          <div className={`mt-4 p-3 rounded-lg text-sm ${
+            planMessage.type === "success"
+              ? "bg-green-50 text-green-700 border border-green-200"
+              : "bg-red-50 text-red-700 border border-red-200"
+          }`}>
+            {planMessage.text}
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end">
+          <button
+            onClick={handleSavePlans}
+            disabled={savingPlans || !hasChanges}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-colors bg-button text-white hover:bg-button/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {savingPlans ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            Enregistrer
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

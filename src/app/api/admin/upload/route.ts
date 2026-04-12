@@ -13,6 +13,7 @@ async function checkAdmin() {
 }
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml'];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 Mo
 const ALLOWED_VIDEO_TYPES = [
   'video/mp4',
   'video/quicktime',      // .mov
@@ -234,6 +235,14 @@ export async function POST(req: NextRequest) {
 
     default:
       return NextResponse.json({ error: 'Type non reconnu' }, { status: 400 });
+  }
+
+  // Enforce size limit for image uploads (5 Mo)
+  if (ALLOWED_IMAGE_TYPES.includes(contentType) && file.size > MAX_IMAGE_SIZE) {
+    return NextResponse.json(
+      { error: `L'image est trop lourde (${(file.size / 1024 / 1024).toFixed(1)} Mo). Taille maximale : 5 Mo.` },
+      { status: 400 }
+    );
   }
 
   try {
