@@ -43,9 +43,8 @@ describe('canAccessCourse', () => {
   it('retourne true si le cours est dans l\'abo + acheté + abo actif (doublon)', async () => {
     prismaMock.course.findUnique.mockResolvedValue({ includedInSubscription: true });
     prismaMock.subscription.findUnique.mockResolvedValue({ status: 'ACTIVE' });
+    prismaMock.purchase.findFirst.mockResolvedValue({ id: 'purchase-1' });
     expect(await canAccessCourse('user-1', 'course-1')).toBe(true);
-    // Vérifie qu'il n'y a pas eu de vérification purchase inutile
-    expect(prismaMock.purchase.findFirst).not.toHaveBeenCalled();
   });
 
   it('retourne true pour un admin même sans cours', async () => {

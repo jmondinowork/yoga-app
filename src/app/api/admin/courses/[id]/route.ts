@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { deleteR2Folder } from '@/lib/r2';
@@ -128,6 +129,7 @@ export async function PATCH(
       }).catch((err) => console.error('[EMAIL_NOTIF_ERROR]', err));
     }
 
+    revalidateTag('admin-dashboard', 'max');
     return NextResponse.json(course);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -165,6 +167,7 @@ export async function DELETE(
   }
 
   await prisma.course.delete({ where: { id } });
+  revalidateTag('admin-dashboard', 'max');
 
   // Nettoyage des fichiers R2 associés
   try {

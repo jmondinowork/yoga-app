@@ -67,11 +67,16 @@ export async function GET(req: NextRequest) {
     prisma.user.count({ where }),
   ]);
 
-  return NextResponse.json({
-    users,
-    total,
-    pagination: { page, limit, totalPages: Math.ceil(total / limit) },
-  });
+  return NextResponse.json(
+    {
+      users,
+      total,
+      pagination: { page, limit, totalPages: Math.ceil(total / limit) },
+    },
+    {
+      headers: { 'Cache-Control': 'private, s-maxage=15, stale-while-revalidate=30' },
+    }
+  );
 }
 
 // PATCH - Modifier le rôle d'un utilisateur

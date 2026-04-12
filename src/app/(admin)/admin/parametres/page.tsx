@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { User, Lock, Save, Eye, EyeOff } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -8,7 +9,6 @@ import Button from "@/components/ui/Button";
 export default function AdminParametresPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(true);
 
   const [savingName, setSavingName] = useState(false);
   const [nameMessage, setNameMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -22,23 +22,19 @@ export default function AdminParametresPage() {
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  const fetcher = (url: string) => fetch(url).then(r => r.json());
+  const { data: accountData, isLoading: loading } = useSWR(
+    "/api/admin/account",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 120_000 }
+  );
+
   useEffect(() => {
-    async function fetchAccount() {
-      try {
-        const res = await fetch("/api/admin/account");
-        if (res.ok) {
-          const data = await res.json();
-          setName(data.name || "");
-          setEmail(data.email || "");
-        }
-      } catch {
-        console.error("Erreur lors du chargement du profil");
-      } finally {
-        setLoading(false);
-      }
+    if (accountData) {
+      setName(accountData.name || "");
+      setEmail(accountData.email || "");
     }
-    fetchAccount();
-  }, []);
+  }, [accountData]);
 
   async function handleSaveName(e: React.FormEvent) {
     e.preventDefault();

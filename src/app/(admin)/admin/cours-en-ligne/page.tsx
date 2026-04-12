@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import useSWR from "swr";
 import {
   Plus,
   Search,
@@ -56,9 +57,7 @@ const RECURRENCE_LABELS: Record<string, string> = {
 };
 
 export default function AdminCalendrierPage() {
-  const [events, setEvents] = useState<LiveEvent[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -66,28 +65,14 @@ export default function AdminCalendrierPage() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState<string | null>(null);
 
-  const fetchEvents = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/admin/events?limit=100&search=${encodeURIComponent(search)}`
-      );
-      if (!res.ok) {
-        console.error("Erreur serveur:", res.status);
-        return;
-      }
-      const data = await res.json();
-      setEvents(data.events || []);
-    } catch (err) {
-      console.error("Erreur lors du chargement des événements", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [search]);
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+  const fetcher = (url: string) => fetch(url).then(r => r.json());
+  const { data: eventsData, isLoading: loading, mutate: mutateEvents } = useSWR(
+    `/api/admin/events?limit=100&search=${encodeURIComponent(search)}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
+  const events: LiveEvent[] = eventsData?.events || [];
+  const fetchEvents = useCallback(() => mutateEvents(), [mutateEvents]);
 
   function openCreate() {
     setEditingId(null);

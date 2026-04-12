@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import useSWR, { mutate as globalMutate } from "swr";
 import {
   Plus,
   Search,
@@ -84,9 +85,7 @@ async function extractVideoMetadata(videoFile: File): Promise<{ thumbnail: File 
 }
 
 export default function AdminCoursPage() {
-  const [courses, setCourses] = useState<Course[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -101,7 +100,6 @@ export default function AdminCoursPage() {
   const [bulkSaving, setBulkSaving] = useState(false);
 
   // Themes
-  const [themes, setThemes] = useState<{ name: string; courseCount: number }[]>([]);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [newThemeName, setNewThemeName] = useState("");
   const [themeError, setThemeError] = useState("");
@@ -109,19 +107,24 @@ export default function AdminCoursPage() {
   const [editingTheme, setEditingTheme] = useState<string | null>(null);
   const [editingThemeName, setEditingThemeName] = useState("");
 
-  const fetchThemes = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/themes");
-      const data = await res.json();
-      setThemes(data.themes || []);
-    } catch {
-      console.error("Erreur lors du chargement des thèmes");
-    }
-  }, []);
+  const fetcher = (url: string) => fetch(url).then(r => r.json());
 
-  useEffect(() => {
-    fetchThemes();
-  }, [fetchThemes]);
+  const { data: coursesData, isLoading: loading, mutate: mutateCourses } = useSWR(
+    `/api/admin/courses?limit=100&search=${encodeURIComponent(search)}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
+  const courses: Course[] = coursesData?.courses || [];
+
+  const { data: themesData, mutate: mutateThemes } = useSWR<{ themes: { name: string; courseCount: number }[] }>(
+    "/api/admin/themes",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+  const themes = themesData?.themes || [];
+
+  const fetchCourses = useCallback(() => mutateCourses(), [mutateCourses]);
+  const fetchThemes = useCallback(() => mutateThemes(), [mutateThemes]);
 
   async function handleAddTheme() {
     if (!newThemeName.trim()) return;
@@ -136,7 +139,7 @@ export default function AdminCoursPage() {
       const data = await res.json();
       if (!res.ok) { setThemeError(data.error || "Erreur"); return; }
       setNewThemeName("");
-      fetchThemes();
+      mutateThemes();
     } catch {
       setThemeError("Erreur de connexion");
     } finally {
@@ -157,8 +160,8 @@ export default function AdminCoursPage() {
       const data = await res.json();
       if (!res.ok) { setThemeError(data.error || "Erreur"); return; }
       setEditingTheme(null);
-      fetchThemes();
-      fetchCourses();
+      mutateThemes();
+      mutateCourses();
     } catch {
       setThemeError("Erreur de connexion");
     } finally {
@@ -177,7 +180,7 @@ export default function AdminCoursPage() {
       });
       const data = await res.json();
       if (!res.ok) { setThemeError(data.error || "Erreur"); return; }
-      fetchThemes();
+      mutateThemes();
     } catch {
       setThemeError("Erreur de connexion");
     } finally {
@@ -214,25 +217,6 @@ export default function AdminCoursPage() {
       xhr.send(fd);
     });
   }
-
-  const fetchCourses = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/admin/courses?limit=100&search=${encodeURIComponent(search)}`
-      );
-      const data = await res.json();
-      setCourses(data.courses || []);
-    } catch {
-      console.error("Erreur lors du chargement des cours");
-    } finally {
-      setLoading(false);
-    }
-  }, [search]);
-
-  useEffect(() => {
-    fetchCourses();
-  }, [fetchCourses]);
 
   function generateSlug(title: string) {
     return title

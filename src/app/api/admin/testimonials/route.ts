@@ -43,7 +43,9 @@ export async function GET() {
     const testimonials = await prisma.testimonial.findMany({
       orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json(testimonials);
+    return NextResponse.json(testimonials, {
+      headers: { 'Cache-Control': 'private, s-maxage=300, stale-while-revalidate=600' },
+    });
   } catch (error) {
     console.error("[ADMIN_TESTIMONIALS_GET_ERROR]", error);
     return NextResponse.json(

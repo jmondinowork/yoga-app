@@ -37,10 +37,15 @@ export async function GET() {
       prisma.siteContent.findUnique({ where: { key: "faq_pricing" } }),
     ]);
 
-    return NextResponse.json({
-      homepage: homepageFaq ? JSON.parse(homepageFaq.value) : [],
-      pricing: pricingFaq ? JSON.parse(pricingFaq.value) : [],
-    });
+    return NextResponse.json(
+      {
+        homepage: homepageFaq ? JSON.parse(homepageFaq.value) : [],
+        pricing: pricingFaq ? JSON.parse(pricingFaq.value) : [],
+      },
+      {
+        headers: { 'Cache-Control': 'private, s-maxage=300, stale-while-revalidate=600' },
+      }
+    );
   } catch (error) {
     console.error("[ADMIN_FAQ_GET_ERROR]", error);
     return NextResponse.json(

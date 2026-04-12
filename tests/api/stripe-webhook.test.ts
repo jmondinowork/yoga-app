@@ -19,6 +19,7 @@ const stripeWebhooksConstructEvent = vi.fn();
 const stripeSubscriptionsRetrieve = vi.fn();
 
 vi.mock('@/lib/stripe', () => ({
+  SIMULATE_PAYMENTS: false,
   stripe: {
     webhooks: {
       constructEvent: (...args: unknown[]) => stripeWebhooksConstructEvent(...args),
@@ -28,6 +29,9 @@ vi.mock('@/lib/stripe', () => ({
     },
   },
 }));
+
+// Nécessaire car le module lit process.env.STRIPE_WEBHOOK_SECRET au chargement
+process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
 
 function createWebhookRequest(body: string) {
   return new NextRequest(new URL('http://localhost:3000/api/stripe/webhook'), {

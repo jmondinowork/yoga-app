@@ -23,7 +23,9 @@ export async function GET() {
     const entries = await prisma.siteContent.findMany();
     const content: Record<string, string> = {};
     for (const e of entries) content[e.key] = e.value;
-    return NextResponse.json(content);
+    return NextResponse.json(content, {
+      headers: { 'Cache-Control': 'private, s-maxage=300, stale-while-revalidate=600' },
+    });
   } catch (error) {
     console.error("[ADMIN_CONTENT_GET_ERROR]", error);
     return NextResponse.json(

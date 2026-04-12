@@ -51,9 +51,16 @@ export async function GET() {
   });
   const countMap = Object.fromEntries(counts.map((c) => [c.theme, c._count.id]));
 
-  return NextResponse.json({
-    themes: themes.map((t) => ({ name: t, courseCount: countMap[t] ?? 0 })),
-  });
+  return NextResponse.json(
+    {
+      themes: themes.map((t) => ({ name: t, courseCount: countMap[t] ?? 0 })),
+    },
+    {
+      headers: {
+        'Cache-Control': 'private, s-maxage=300, stale-while-revalidate=600',
+      },
+    }
+  );
 }
 
 export async function POST(req: Request) {

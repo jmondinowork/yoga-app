@@ -2,6 +2,9 @@ import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 
 // Mode démo : actif quand STRIPE_DEMO=true (simuler les paiements sans appeler Stripe)
+if (process.env.NODE_ENV === "production" && process.env.STRIPE_DEMO === "true") {
+  throw new Error("STRIPE_DEMO=true est interdit en production !");
+}
 export const SIMULATE_PAYMENTS = process.env.STRIPE_DEMO === "true";
 
 let _stripe: Stripe | null = null;

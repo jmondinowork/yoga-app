@@ -99,26 +99,33 @@ export async function GET(req: NextRequest) {
   const annualPrice = plans.find(p => p.id === 'annual')?.price || 200;
   const mrrTotal = monthlySubs * monthlyPrice + annualSubs * (annualPrice / 12);
 
-  return NextResponse.json({
-    subscriptions,
-    formationPurchases,
-    courseRentals,
-    stats: {
-      monthlyActive: monthlySubs,
-      annualActive: annualSubs,
-      monthlyPrice,
-      annualPrice,
-      totalFormationPurchases: totalFormationCount,
-      formationRevenue: totalFormationRevenue._sum.amount || 0,
-      totalCourseRentals: totalCourseRentalCount,
-      courseRentalRevenue: totalCourseRentalRevenue._sum.amount || 0,
-      totalRevenue: purchaseRevenue + mrrTotal,
+  return NextResponse.json(
+    {
+      subscriptions,
+      formationPurchases,
+      courseRentals,
+      stats: {
+        monthlyActive: monthlySubs,
+        annualActive: annualSubs,
+        monthlyPrice,
+        annualPrice,
+        totalFormationPurchases: totalFormationCount,
+        formationRevenue: totalFormationRevenue._sum.amount || 0,
+        totalCourseRentals: totalCourseRentalCount,
+        courseRentalRevenue: totalCourseRentalRevenue._sum.amount || 0,
+        totalRevenue: purchaseRevenue + mrrTotal,
+      },
+      pagination: {
+        page,
+        limit,
+        totalSubscriptions: subscriptionCount,
+        totalPurchases: purchaseCount,
+      },
     },
-    pagination: {
-      page,
-      limit,
-      totalSubscriptions: subscriptionCount,
-      totalPurchases: purchaseCount,
-    },
-  });
+    {
+      headers: {
+        'Cache-Control': 'private, s-maxage=30, stale-while-revalidate=60',
+      },
+    }
+  );
 }

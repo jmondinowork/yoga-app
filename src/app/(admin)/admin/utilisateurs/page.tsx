@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import useSWR from "swr";
 import { Search, Trash2, UserPlus, AlertTriangle } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import Modal from "@/components/ui/Modal";
@@ -23,14 +24,10 @@ interface UserData {
 }
 
 export default function AdminUtilisateursPage() {
-  const [users, setUsers] = useState<UserData[]>([]);
-  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("");
-  const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<UserData | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Invitation modal state
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -42,30 +39,27 @@ export default function AdminUtilisateursPage() {
   const [inviteError, setInviteError] = useState("");
   const [inviteSuccess, setInviteSuccess] = useState("");
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (search) params.set("search", search);
-      if (filter) params.set("filter", filter);
-      const res = await fetch(`/api/admin/users?${params}`);
-      const data = await res.json();
-      setUsers(data.users || []);
-      setTotal(data.total || 0);
-    } catch {
-      console.error("Erreur lors du chargement des utilisateurs");
-    } finally {
-      setLoading(false);
-    }
-  }, [search, filter]);
+  const fetcher = (url: string) => fetch(url).then(r => r.json());
 
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+  const usersParams = new URLSearchParams();
+  if (search) usersParams.set("search", search);
+  if (filter) usersParams.set("filter", filter);
+  const { data: usersData, isLoading: loading, mutate: mutateUsers } = useSWR(
+    `/api/admin/users?${usersParams}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
+  const users: UserData[] = usersData?.users || [];
+  const total = usersData?.total || 0;
 
-  useEffect(() => {
-    fetch("/api/admin/account").then(r => r.json()).then(d => setCurrentUserId(d.id)).catch(() => {});
-  }, []);
+  const { data: accountData } = useSWR<{ id: string }>(
+    "/api/admin/account",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 120_000 }
+  );
+  const currentUserId = accountData?.id || null;
+
+  const fetchUsers = useCallback(() => mutateUsers(), [mutateUsers]);
 
   async function deleteUser() {
     if (!deleteTarget) return;

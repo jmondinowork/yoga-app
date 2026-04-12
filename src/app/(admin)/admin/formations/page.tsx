@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import useSWR from "swr";
 import {
   Plus,
   Search,
@@ -92,9 +93,7 @@ async function extractVideoMetadata(videoFile: File): Promise<{ thumbnail: File 
 }
 
 export default function AdminFormationsPage() {
-  const [formations, setFormations] = useState<Formation[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyFormation);
@@ -116,7 +115,6 @@ export default function AdminFormationsPage() {
   const [uploadProgress, setUploadProgress] = useState("");
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
 
-  // Drag & drop and thumbnail preview
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
@@ -144,22 +142,14 @@ export default function AdminFormationsPage() {
     });
   }
 
-  const fetchFormations = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/formations?limit=100&search=${encodeURIComponent(search)}`);
-      const data = await res.json();
-      setFormations(data.formations || []);
-    } catch {
-      console.error("Erreur lors du chargement des formations");
-    } finally {
-      setLoading(false);
-    }
-  }, [search]);
-
-  useEffect(() => {
-    fetchFormations();
-  }, [fetchFormations]);
+  const fetcher = (url: string) => fetch(url).then(r => r.json());
+  const { data: formationsData, isLoading: loading, mutate: mutateFormations } = useSWR(
+    `/api/admin/formations?limit=100&search=${encodeURIComponent(search)}`,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
+  const formations: Formation[] = formationsData?.formations || [];
+  const fetchFormations = useCallback(() => mutateFormations(), [mutateFormations]);
 
   function generateSlug(title: string) {
     return title

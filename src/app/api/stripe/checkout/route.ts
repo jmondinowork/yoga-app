@@ -262,6 +262,13 @@ export async function POST(req: NextRequest) {
         itemPrice = item.price ? Math.round(item.price * 100) : 0;
       }
 
+      if (!itemPrice || itemPrice <= 0) {
+        return NextResponse.json(
+          { error: 'Prix invalide pour cet article.' },
+          { status: 400 }
+        );
+      }
+
       // Vérifier si déjà loué/acheté
       if (type === 'course') {
         const existingRental = await prisma.purchase.findFirst({

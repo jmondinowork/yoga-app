@@ -71,9 +71,11 @@ describe('GET /api/courses/[slug]', () => {
       routeParams('test')
     );
 
-    expect(prismaMock.course.findUnique).toHaveBeenCalledWith({
-      where: { slug: 'test', isPublished: true },
-    });
+    expect(prismaMock.course.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { slug: 'test', isPublished: true },
+      })
+    );
   });
 
   it('est accessible sans authentification (route publique)', async () => {

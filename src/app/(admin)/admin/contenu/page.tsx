@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import useSWR from "swr";
 import { HexColorPicker } from "react-colorful";
 import {
   Save,
@@ -405,15 +406,12 @@ export default function AdminContenuPage() {
 
   // Global site content (key-value)
   const [content, setContent] = useState<Record<string, string>>({});
-  const [loadingContent, setLoadingContent] = useState(true);
 
   // Testimonials
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
-  const [loadingTestimonials, setLoadingTestimonials] = useState(true);
 
   // FAQ
   const [faq, setFaq] = useState<FaqData>({ homepage: [], pricing: [] });
-  const [loadingFaq, setLoadingFaq] = useState(true);
 
   // Saving states per tab
   const [saving, setSaving] = useState<Record<string, boolean>>({});
@@ -531,72 +529,53 @@ export default function AdminContenuPage() {
   }
 
   // ---------------------------------------------------------------------------
-  // Fetch data on mount
+  // Fetch data via SWR
   // ---------------------------------------------------------------------------
+  const swrFetcher = (url: string) => fetch(url).then(r => { if (!r.ok) throw new Error('fetch error'); return r.json(); });
 
+  const { data: contentData, isLoading: loadingContent } = useSWR<Record<string, string>>(
+    "/api/admin/content",
+    swrFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+  const { data: testimonialsData, isLoading: loadingTestimonials } = useSWR<Testimonial[]>(
+    "/api/admin/testimonials",
+    swrFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+  const { data: faqData, isLoading: loadingFaq } = useSWR<FaqData>(
+    "/api/admin/faq",
+    swrFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+
+  // Sync SWR data into local state for editing
   useEffect(() => {
-    async function fetchContent() {
-      try {
-        const res = await fetch("/api/admin/content");
-        if (res.ok) {
-          const data = await res.json();
-          setContent(data);
-          // Resolve presigned URLs for image keys
-          const imageKeys = ["image_homepage_hero", "image_homepage_about", "image_about_portrait", "seo_og_image", "site_logo", "site_favicon"];
-          const keysToResolve = imageKeys.map(k => data[k]).filter(Boolean);
-          if (keysToResolve.length > 0) {
-            try {
-              const urlRes = await fetch("/api/admin/content/image-url", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ keys: keysToResolve }),
-              });
-              if (urlRes.ok) {
-                const { urls } = await urlRes.json();
-                setImageUrls(urls);
-              }
-            } catch { /* ignore */ }
-          }
-        }
-      } catch {
-        console.error("Failed to fetch content");
-      } finally {
-        setLoadingContent(false);
-      }
-    }
+    if (contentData) setContent(contentData);
+  }, [contentData]);
+  useEffect(() => {
+    if (testimonialsData) setTestimonials(testimonialsData);
+  }, [testimonialsData]);
+  useEffect(() => {
+    if (faqData) setFaq(faqData);
+  }, [faqData]);
 
-    async function fetchTestimonials() {
-      try {
-        const res = await fetch("/api/admin/testimonials");
-        if (res.ok) {
-          const data = await res.json();
-          setTestimonials(data);
-        }
-      } catch {
-        console.error("Failed to fetch testimonials");
-      } finally {
-        setLoadingTestimonials(false);
-      }
+  // Resolve presigned image URLs when content loads
+  useEffect(() => {
+    if (!contentData) return;
+    const imageKeys = ["image_homepage_hero", "image_homepage_about", "image_about_portrait", "seo_og_image", "site_logo", "site_favicon"];
+    const keysToResolve = imageKeys.map(k => contentData[k]).filter(Boolean);
+    if (keysToResolve.length > 0) {
+      fetch("/api/admin/content/image-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keys: keysToResolve }),
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.urls) setImageUrls(data.urls); })
+        .catch(() => {});
     }
-
-    async function fetchFaq() {
-      try {
-        const res = await fetch("/api/admin/faq");
-        if (res.ok) {
-          const data = await res.json();
-          setFaq(data);
-        }
-      } catch {
-        console.error("Failed to fetch FAQ");
-      } finally {
-        setLoadingFaq(false);
-      }
-    }
-
-    fetchContent();
-    fetchTestimonials();
-    fetchFaq();
-  }, []);
+  }, [contentData]);
 
   // ---------------------------------------------------------------------------
   // Save handlers

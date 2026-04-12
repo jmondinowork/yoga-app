@@ -46,6 +46,7 @@ describe('Admin API /api/admin/users', () => {
         { id: 'u2', name: 'Bob', email: 'bob@test.com', role: 'ADMIN', createdAt: new Date(), subscription: { plan: 'MONTHLY', status: 'ACTIVE' }, _count: { purchases: 2 } },
       ];
       prismaMock.user.findMany.mockResolvedValue(users);
+      prismaMock.user.count.mockResolvedValue(2);
 
       const { GET } = await import('@/app/api/admin/users/route');
       const res = await GET(createRequest('http://localhost:3000/api/admin/users'));

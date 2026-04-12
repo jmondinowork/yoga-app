@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import useSWR from "swr";
 import { CreditCard, Users, ShoppingBag, TrendingUp, BookOpen, Video, Clock, Settings, Save, Loader2 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 
@@ -62,55 +63,49 @@ const statusVariants: Record<string, "success" | "warning" | "premium"> = {
 type Tab = "monthly" | "annual" | "formations" | "rentals";
 
 export default function AdminRevenusPage() {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [formationPurchases, setFormationPurchases] = useState<Purchase[]>([]);
-  const [courseRentals, setCourseRentals] = useState<Purchase[]>([]);
-  const [stats, setStats] = useState<Stats>({
+  const [tab, setTab] = useState<Tab>("monthly");
+
+  // Pricing plans editing state
+  const [editedPlans, setEditedPlans] = useState<Record<string, { price: string; stripePriceId: string }>>({});
+  const [savingPlans, setSavingPlans] = useState(false);
+  const [planMessage, setPlanMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const fetcher = (url: string) => fetch(url).then(r => r.json());
+
+  const { data: subsData, isLoading: loadingSubs } = useSWR(
+    "/api/admin/subscriptions",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
+  const { data: pricingData, isLoading: loadingPricing } = useSWR(
+    "/api/admin/pricing",
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 }
+  );
+
+  const subscriptions: Subscription[] = subsData?.subscriptions || [];
+  const formationPurchases: Purchase[] = subsData?.formationPurchases || [];
+  const courseRentals: Purchase[] = subsData?.courseRentals || [];
+  const stats: Stats = subsData?.stats || {
     monthlyActive: 0, annualActive: 0,
     monthlyPrice: 22, annualPrice: 200,
     totalFormationPurchases: 0, formationRevenue: 0,
     totalCourseRentals: 0, courseRentalRevenue: 0,
     totalRevenue: 0,
-  });
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>("monthly");
+  };
+  const pricingPlans: PricingPlan[] = pricingData?.plans || [];
+  const loading = loadingSubs || loadingPricing;
 
-  // Pricing plans state
-  const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>([]);
-  const [editedPlans, setEditedPlans] = useState<Record<string, { price: string; stripePriceId: string }>>({});
-  const [savingPlans, setSavingPlans] = useState(false);
-  const [planMessage, setPlanMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
+  // Initialize edited plans when pricing data loads
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [subsRes, pricingRes] = await Promise.all([
-          fetch("/api/admin/subscriptions"),
-          fetch("/api/admin/pricing"),
-        ]);
-        const data = await subsRes.json();
-        const pricingData = await pricingRes.json();
-        setSubscriptions(data.subscriptions || []);
-        setFormationPurchases(data.formationPurchases || []);
-        setCourseRentals(data.courseRentals || []);
-        setStats(data.stats || stats);
-        if (pricingData.plans) {
-          setPricingPlans(pricingData.plans);
-          const edited: Record<string, { price: string; stripePriceId: string }> = {};
-          for (const p of pricingData.plans) {
-            edited[p.slug] = { price: String(p.price), stripePriceId: p.stripePriceId };
-          }
-          setEditedPlans(edited);
-        }
-      } catch {
-        console.error("Erreur lors du chargement");
-      } finally {
-        setLoading(false);
+    if (pricingData?.plans) {
+      const edited: Record<string, { price: string; stripePriceId: string }> = {};
+      for (const p of pricingData.plans) {
+        edited[p.slug] = { price: String(p.price), stripePriceId: p.stripePriceId };
       }
+      setEditedPlans(edited);
     }
-    fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pricingData]);
 
   const monthlySubs = subscriptions.filter(s => s.plan === "MONTHLY");
   const annualSubs = subscriptions.filter(s => s.plan === "ANNUAL");
@@ -166,7 +161,7 @@ export default function AdminRevenusPage() {
       }
 
       const data = await res.json();
-      setPricingPlans(data.plans);
+      // SWR will refresh on next focus, data is up to date via response
       setPlanMessage({ type: "success", text: "Plans tarifaires mis à jour." });
     } catch (err) {
       setPlanMessage({ type: "error", text: err instanceof Error ? err.message : "Erreur inconnue" });

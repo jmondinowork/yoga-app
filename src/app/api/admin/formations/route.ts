@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod/v4';
@@ -82,15 +83,20 @@ export async function GET(req: NextRequest) {
     prisma.formation.count({ where }),
   ]);
 
-  return NextResponse.json({
-    formations,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
+  return NextResponse.json(
+    {
+      formations,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     },
-  });
+    {
+      headers: { 'Cache-Control': 'private, s-maxage=30, stale-while-revalidate=60' },
+    }
+  );
 }
 
 // POST - Créer une formation
@@ -149,6 +155,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    revalidateTag('admin-dashboard', 'max');
     return NextResponse.json(formation, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

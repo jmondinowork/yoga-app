@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod/v4";
@@ -121,6 +122,7 @@ export async function PATCH(
       },
     });
 
+    revalidateTag('admin-dashboard', 'max');
     return NextResponse.json(event);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -155,6 +157,7 @@ export async function DELETE(
   }
 
   await prisma.liveEvent.delete({ where: { id } });
+  revalidateTag('admin-dashboard', 'max');
 
   return NextResponse.json({ success: true });
 }

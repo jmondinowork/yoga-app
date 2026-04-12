@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
@@ -21,7 +22,14 @@ export async function GET() {
     orderBy: { slug: 'asc' },
   });
 
-  return NextResponse.json({ plans });
+  return NextResponse.json(
+    { plans },
+    {
+      headers: {
+        'Cache-Control': 'private, s-maxage=300, stale-while-revalidate=600',
+      },
+    }
+  );
 }
 
 // PUT - Met à jour les plans tarifaires (prix + stripePriceId)
@@ -65,5 +73,6 @@ export async function PUT(req: Request) {
     )
   );
 
+  revalidateTag('admin-dashboard', 'max');
   return NextResponse.json({ plans: updated });
 }

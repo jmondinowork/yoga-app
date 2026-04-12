@@ -26,7 +26,9 @@ export async function GET() {
     return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 404 });
   }
 
-  return NextResponse.json(user);
+  return NextResponse.json(user, {
+    headers: { 'Cache-Control': 'private, max-age=300' },
+  });
 }
 
 export async function PATCH(req: NextRequest) {

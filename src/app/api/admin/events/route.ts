@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod/v4";
@@ -85,15 +86,22 @@ export async function GET(req: NextRequest) {
       prisma.liveEvent.count({ where }),
     ]);
 
-    return NextResponse.json({
-      events,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+    return NextResponse.json(
+      {
+        events,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
       },
-    });
+      {
+        headers: {
+          'Cache-Control': 'private, s-maxage=30, stale-while-revalidate=60',
+        },
+      }
+    );
   } catch (error) {
     console.error("[ADMIN_EVENTS_LIST_ERROR]", error);
     return NextResponse.json(
@@ -130,6 +138,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    revalidateTag('admin-dashboard', 'max');
     return NextResponse.json(event, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
