@@ -470,7 +470,7 @@ export default function AdminContenuPage() {
     for (const c of DEFAULT_COLORS) {
       const val = entries[c.key];
       if (val !== undefined) {
-        root.style.setProperty(`--color-${c.key.replace("color_", "")}`, val);
+        root.style.setProperty(`--color-${c.key.replace("color_", "").replaceAll("_", "-")}`, val);
       }
     }
     // Fonts

@@ -69,11 +69,15 @@ async function handleSimulatedCheckout(
     let item: { id: string; slug: string; price: number | null } | null = null;
 
     if (type === 'course') {
-      item = await prisma.course.findUnique({
+      const courseData = await prisma.course.findUnique({
         where: { id: courseId },
-        select: { id: true, slug: true, price: true },
+        select: { id: true, slug: true, price: true, availableForRental: true },
       });
-      if (!item) return NextResponse.json({ error: 'Cours introuvable.' }, { status: 404 });
+      if (!courseData) return NextResponse.json({ error: 'Cours introuvable.' }, { status: 404 });
+      if (!courseData.availableForRental) {
+        return NextResponse.json({ error: 'Ce cours n\'est pas disponible en location.' }, { status: 400 });
+      }
+      item = courseData;
     } else {
       item = await prisma.formation.findUnique({
         where: { id: courseId },
@@ -241,6 +245,13 @@ export async function POST(req: NextRequest) {
           return NextResponse.json(
             { error: 'Cours introuvable.' },
             { status: 404 }
+          );
+        }
+
+        if (!item.availableForRental) {
+          return NextResponse.json(
+            { error: 'Ce cours n\'est pas disponible en location.' },
+            { status: 400 }
           );
         }
 

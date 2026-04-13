@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
         theme: true,
         price: true,
         includedInSubscription: true,
+        availableForRental: true,
       },
     }),
     prisma.course.count({ where }),

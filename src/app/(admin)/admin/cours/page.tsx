@@ -36,6 +36,7 @@ interface Course {
   theme: string;
   price: number | null;
   includedInSubscription: boolean;
+  availableForRental: boolean;
   isPublished: boolean;
   sortOrder: number;
   _count: { purchases: number; progress: number };
@@ -51,6 +52,7 @@ const emptyForm = {
   theme: "Vinyasa",
   price: "10",
   includedInSubscription: true,
+  availableForRental: true,
   isPublished: false,
 };
 
@@ -252,6 +254,7 @@ export default function AdminCoursPage() {
       theme: course.theme,
       price: course.price?.toString() || "",
       includedInSubscription: course.includedInSubscription,
+      availableForRental: course.availableForRental,
       isPublished: course.isPublished,
     });
     setError("");
@@ -338,6 +341,7 @@ export default function AdminCoursPage() {
         theme: form.theme,
         price: form.price ? parseFloat(form.price) : null,
         includedInSubscription: form.includedInSubscription,
+        availableForRental: form.availableForRental,
         isPublished: form.isPublished,
       };
 
@@ -417,6 +421,21 @@ export default function AdminCoursPage() {
     }
   }
 
+  async function handleToggleRental(course: Course) {
+    try {
+      await fetch(`/api/admin/courses/${course.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          availableForRental: !course.availableForRental,
+        }),
+      });
+      fetchCourses();
+    } catch {
+      console.error("Erreur lors du changement");
+    }
+  }
+
   // Multi-select handlers
   function toggleSelect(id: string) {
     const next = new Set(selected);
@@ -483,6 +502,34 @@ export default function AdminCoursPage() {
         setSelected(new Set());
         fetchCourses();
         setToast("Abonnement mis à jour ✓");
+        setTimeout(() => setToast(null), 3000);
+      }
+    } catch {
+      setToast("Erreur lors de la mise à jour en lot");
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
+  async function bulkToggleRental(value: boolean) {
+    if (selected.size === 0) return;
+    setBulkSaving(true);
+
+    try {
+      const res = await fetch("/api/admin/courses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ids: Array.from(selected),
+          data: { availableForRental: value },
+        }),
+      });
+
+      if (res.ok) {
+        setSelected(new Set());
+        fetchCourses();
+        setToast("Location mise à jour ✓");
         setTimeout(() => setToast(null), 3000);
       }
     } catch {
@@ -599,6 +646,22 @@ export default function AdminCoursPage() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => bulkToggleRental(true)}
+              disabled={bulkSaving}
+            >
+              Activer location
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => bulkToggleRental(false)}
+              disabled={bulkSaving}
+            >
+              Désactiver location
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => bulkTogglePublish(true)}
               disabled={bulkSaving}
             >
@@ -692,6 +755,9 @@ export default function AdminCoursPage() {
                     Abo
                   </th>
                   <th className="text-left p-4 text-sm font-medium text-heading">
+                    Location
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-heading">
                     Statut
                   </th>
                   <th className="text-right p-4 text-sm font-medium text-heading">
@@ -750,6 +816,23 @@ export default function AdminCoursPage() {
                           <Badge variant="success">Inclus</Badge>
                         ) : (
                           <Badge variant="warning">Exclu</Badge>
+                        )}
+                      </button>
+                    </td>
+                    <td className="p-4">
+                      <button
+                        onClick={() => handleToggleRental(course)}
+                        className="cursor-pointer"
+                        title={
+                          course.availableForRental
+                            ? "Disponible en location"
+                            : "Non disponible en location"
+                        }
+                      >
+                        {course.availableForRental ? (
+                          <Badge variant="success">Oui</Badge>
+                        ) : (
+                          <Badge variant="warning">Non</Badge>
                         )}
                       </button>
                     </td>
@@ -1153,6 +1236,15 @@ export default function AdminCoursPage() {
                   className="w-4 h-4 rounded accent-button"
                 />
                 Inclus dans l&apos;abonnement
+              </label>
+              <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.availableForRental}
+                  onChange={(e) => setForm({ ...form, availableForRental: e.target.checked })}
+                  className="w-4 h-4 rounded accent-button"
+                />
+                Disponible en location
               </label>
               <label className="flex items-center gap-2 text-sm text-text cursor-pointer">
                 <input

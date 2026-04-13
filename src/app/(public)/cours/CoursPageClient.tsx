@@ -12,6 +12,7 @@ interface Course {
   theme: string;
   price: number | null;
   includedInSubscription: boolean;
+  availableForRental: boolean;
 }
 
 export default function CoursPageClient() {

@@ -17,6 +17,7 @@ const updateCourseSchema = z.object({
   theme: z.string().min(2).optional(),
   price: z.number().min(0).optional().nullable(),
   includedInSubscription: z.boolean().optional(),
+  availableForRental: z.boolean().optional(),
   isPublished: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
 });

@@ -11,7 +11,7 @@ import VideoPlayer from "@/components/courses/VideoPlayer";
 
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { canAccessCourse, getCourseRentalExpiry, hasActiveSubscription } from "@/lib/helpers/access";
+import { canAccessCourse, getCourseRentalExpiry, hasActiveSubscription, hasPranayamaFormation } from "@/lib/helpers/access";
 import { getPresignedUrl } from "@/lib/r2";
 
 export const revalidate = 60;
@@ -51,14 +51,15 @@ export default async function CourseDetailPage({ params }: Props) {
   const [accessResult, vp, relatedCourses, thumbnailUrl] = await Promise.all([
     userId
       ? canAccessCourse(userId, course.id).then(async (hasAccess) => {
-          if (!hasAccess) return { hasAccess: false, isSubscriber: false, rentalExpiry: null };
-          const [isSubscriber, rentalExpiry] = await Promise.all([
+          if (!hasAccess) return { hasAccess: false, isSubscriber: false, rentalExpiry: null, viaPranayama: false };
+          const [isSubscriber, rentalExpiry, ownsPranayama] = await Promise.all([
             hasActiveSubscription(userId),
             getCourseRentalExpiry(userId, course.id),
+            course.theme === "Pranayama" ? hasPranayamaFormation(userId) : Promise.resolve(false),
           ]);
-          return { hasAccess, isSubscriber, rentalExpiry };
+          return { hasAccess, isSubscriber, rentalExpiry, viaPranayama: ownsPranayama && !isSubscriber && !rentalExpiry };
         })
-      : Promise.resolve({ hasAccess: false, isSubscriber: false, rentalExpiry: null as Date | null }),
+      : Promise.resolve({ hasAccess: false, isSubscriber: false, rentalExpiry: null as Date | null, viaPranayama: false }),
     userId
       ? prisma.videoProgress.findUnique({
           where: { userId_courseId: { userId, courseId: course.id } },
@@ -74,7 +75,7 @@ export default async function CourseDetailPage({ params }: Props) {
       : Promise.resolve(course.thumbnail),
   ]);
 
-  const { hasAccess, isSubscriber, rentalExpiry } = accessResult;
+  const { hasAccess, isSubscriber, rentalExpiry, viaPranayama } = accessResult;
   const progress = vp?.progress ?? 0;
   const hoursLeft = rentalExpiry
     ? Math.max(0, Math.ceil((rentalExpiry.getTime() - Date.now()) / (1000 * 60 * 60)))
@@ -122,6 +123,9 @@ export default async function CourseDetailPage({ params }: Props) {
               {hasAccess && !isSubscriber && rentalExpiry && (
                 <Badge variant="success">✓ Location active — {hoursLeft}h restantes</Badge>
               )}
+              {hasAccess && viaPranayama && (
+                <Badge variant="success">✓ Accès inclus — Formation Pranayama</Badge>
+              )}
             </div>
 
             <h1 className="font-heading text-3xl lg:text-4xl font-bold text-heading">
@@ -168,9 +172,9 @@ export default async function CourseDetailPage({ params }: Props) {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          <div className="bg-card rounded-2xl border border-border p-6 space-y-6 sticky top-24">
+          <div className="bg-card rounded-2xl border border-border overflow-hidden sticky top-24">
             {/* Thumbnail */}
-            <div className="relative aspect-video bg-gradient-to-br from-button/10 to-primary/40 rounded-xl flex items-center justify-center overflow-hidden">
+            <div className="relative aspect-video bg-gradient-to-br from-button/10 to-primary/40 flex items-center justify-center overflow-hidden">
               {thumbnailUrl ? (
                 <Image
                   src={thumbnailUrl}
@@ -184,61 +188,92 @@ export default async function CourseDetailPage({ params }: Props) {
               )}
             </div>
 
-            {hasAccess ? (
-              <div>
-                <Badge variant="success" className="text-base px-4 py-1 w-full justify-center">
-                  ✓ Vous avez accès à ce cours
-                </Badge>
-                {isSubscriber ? (
-                  <p className="text-xs text-muted text-center mt-2">
-                    Accès illimité avec votre abonnement
+            <div className="p-5 space-y-5">
+              {hasAccess ? (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                  <p className="font-medium text-green-800 text-sm">
+                    ✓ Vous avez accès à ce cours
                   </p>
-                ) : rentalExpiry ? (
-                  <p className="text-xs text-muted text-center mt-2">
-                    Accès loué 72h — {hoursLeft}h restantes
-                    <br />
-                    (expire le{" "}
-                    {rentalExpiry.toLocaleDateString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })})
-                  </p>
-                ) : null}
-              </div>
-            ) : course.price ? (
-              <div>
-                <p className="text-sm text-muted">Location 72h</p>
-                <p className="font-heading text-4xl font-bold text-heading">
-                  {course.price} <span className="text-lg text-muted">€</span>
+                  {isSubscriber && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Accès illimité avec votre abonnement
+                    </p>
+                  )}
+                  {!isSubscriber && rentalExpiry && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Location 72h — {hoursLeft}h restantes
+                      <br />
+                      Expire le{" "}
+                      {rentalExpiry.toLocaleDateString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  )}
+                  {viaPranayama && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Inclus avec votre Formation Pranayama
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* Abonnement — CTA principal */}
+                  <div className="bg-gradient-to-br from-button/5 to-primary/20 border border-button/20 rounded-xl p-4 space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-button">
+                      Recommandé
+                    </p>
+                    <p className="font-heading text-lg font-bold text-heading">
+                      Accès illimité
+                    </p>
+                    <p className="text-sm text-text leading-relaxed">
+                      Accédez à tous les cours avec un abonnement mensuel ou annuel.
+                    </p>
+                    <Link href="/tarifs">
+                      <Button className="w-full mt-1">
+                        Voir les abonnements
+                      </Button>
+                    </Link>
+                  </div>
+
+                  {/* Location — option secondaire */}
+                  {course.availableForRental && course.price && (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-xs text-muted font-medium">ou bien</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+                  )}
+
+                  {course.availableForRental && course.price && (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-heading">Location 72h</p>
+                        <p className="text-xs text-muted">Accès temporaire</p>
+                      </div>
+                      <PurchaseButton
+                        type="course"
+                        itemId={course.id}
+                        variant="outline"
+                      >
+                        {course.price} €
+                      </PurchaseButton>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="border-t border-border pt-4">
+                <p className="text-xs text-muted">
+                  {isSubscriber
+                    ? <><span>✓ Accès illimité avec votre abonnement</span><br /></>
+                    : viaPranayama
+                    ? <><span>✓ Inclus avec votre Formation Pranayama</span><br /></>
+                    : <>
+                        <span>✓ Accès illimité avec l&apos;abonnement</span><br />
+                        <span>✓ Accès pendant 72h après location</span><br />
+                      </>}
+                  ✓ Disponible sur tous vos appareils<br />
+                  ✓ Suivi de progression inclus
                 </p>
               </div>
-            ) : null}
-
-            {!hasAccess && course.price && (
-              <PurchaseButton
-                type="course"
-                itemId={course.id}
-                className="w-full"
-                size="lg"
-              >
-                Louer 72h — {course.price} €
-              </PurchaseButton>
-            )}
-
-            {!hasAccess && (
-              <div className="text-center">
-                <p className="text-sm text-muted">ou</p>
-                <Link href="/tarifs" className="text-sm text-button hover:underline">
-                  S&apos;abonner pour un accès illimité
-                </Link>
-              </div>
-            )}
-
-            <div className="border-t border-border pt-4">
-              <p className="text-xs text-muted">
-                {isSubscriber
-                  ? <><span>✓ Accès illimité avec votre abonnement</span><br /></>
-                  : <><span>✓ Accès pendant 72h après location</span><br /></>}
-                ✓ Disponible sur tous vos appareils<br />
-                ✓ Suivi de progression inclus
-              </p>
             </div>
           </div>
         </div>

@@ -96,7 +96,7 @@ export default async function RootLayout({
 
   const cssOverrides = Object.entries(colorDefaults)
     .map(([key, defaultVal]) => {
-      const cssVar = `--color-${key.replace("color_", "")}`;
+      const cssVar = `--color-${key.replace("color_", "").replaceAll("_", "-")}`;
       const value = customValues[key] || defaultVal;
       return `${cssVar}: ${value};`;
     })

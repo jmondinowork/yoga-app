@@ -16,6 +16,7 @@ const courseSchema = z.object({
   theme: z.string().min(2),
   price: z.number().min(0).optional(),
   includedInSubscription: z.boolean().default(true),
+  availableForRental: z.boolean().default(true),
   isPublished: z.boolean().default(false),
   sortOrder: z.number().int().default(0),
 });
@@ -67,6 +68,7 @@ export async function GET(req: NextRequest) {
         theme: true,
         price: true,
         includedInSubscription: true,
+        availableForRental: true,
         isPublished: true,
         sortOrder: true,
         createdAt: true,
@@ -155,6 +157,7 @@ const bulkUpdateSchema = z.object({
   data: z.object({
     price: z.number().min(0).optional().nullable(),
     includedInSubscription: z.boolean().optional(),
+    availableForRental: z.boolean().optional(),
     isPublished: z.boolean().optional(),
   }),
 });

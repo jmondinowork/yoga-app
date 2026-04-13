@@ -93,6 +93,7 @@ model Course {
   theme       String
   price                  Float?
   includedInSubscription Boolean @default(true)
+  availableForRental     Boolean @default(true)
   isPublished            Boolean @default(false)
   sortOrder              Int     @default(0)
 

@@ -5,6 +5,7 @@ import Button from "@/components/ui/Button";
 import MesCoursClient from "@/components/dashboard/MesCoursClient";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { hasPranayamaFormation } from "@/lib/helpers/access";
 import { getPresignedUrl } from "@/lib/r2";
 import { redirect } from "next/navigation";
 
@@ -19,7 +20,7 @@ export default async function MesCoursPage() {
   const userId = session.user.id;
 
   // Parallelize all independent queries
-  const [subscription, coursePurchases, allPublished, videoProgress] = await Promise.all([
+  const [subscription, coursePurchases, allPublished, videoProgress, ownsPranayama] = await Promise.all([
     prisma.subscription.findUnique({ where: { userId } }),
     prisma.purchase.findMany({
       where: { userId, courseId: { not: null } },
@@ -33,6 +34,7 @@ export default async function MesCoursPage() {
       where: { userId },
       select: { courseId: true, progress: true },
     }),
+    hasPranayamaFormation(userId),
   ]);
 
   const hasActiveSubscription = subscription?.status === "ACTIVE";
@@ -44,11 +46,11 @@ export default async function MesCoursPage() {
   let accessibleCourses = allPublished;
   if (hasActiveSubscription) {
     accessibleCourses = allPublished.filter(
-      (c) => c.includedInSubscription || purchasedCourseIds.includes(c.id)
+      (c) => c.includedInSubscription || purchasedCourseIds.includes(c.id) || (ownsPranayama && c.theme === "Pranayama")
     );
-  } else if (purchasedCourseIds.length > 0) {
+  } else if (purchasedCourseIds.length > 0 || ownsPranayama) {
     accessibleCourses = allPublished.filter((c) =>
-      purchasedCourseIds.includes(c.id)
+      purchasedCourseIds.includes(c.id) || (ownsPranayama && c.theme === "Pranayama")
     );
   } else {
     accessibleCourses = [];
