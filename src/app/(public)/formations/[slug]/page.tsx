@@ -92,14 +92,14 @@ export default async function FormationDetailPage({ params }: Props) {
 
       <div className="grid lg:grid-cols-3 gap-10">
         {/* Main */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className={`lg:col-span-2 space-y-8 ${hasAccess ? 'order-1' : 'order-2 lg:order-1'}`}>
           {/* Header */}
           <div className="space-y-4">
             <Badge variant="premium">Formation</Badge>
             <h1 className="font-heading text-3xl lg:text-4xl font-bold text-heading">
               {formation.title}
             </h1>
-            <div className="flex items-center gap-6 text-sm text-muted">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted">
               <span className="flex items-center gap-1.5">
                 <Video className="w-4 h-4" />
                 {formation.videos.length} vidéo{formation.videos.length > 1 ? "s" : ""}
@@ -148,7 +148,7 @@ export default async function FormationDetailPage({ params }: Props) {
 
           {/* Livret PDF */}
           {formation.bookletUrl && (
-            <div className="bg-gradient-to-r from-accent-light/50 to-primary/30 rounded-2xl p-6 flex items-center gap-4">
+              <div className="bg-gradient-to-r from-accent-light/50 to-primary/30 rounded-2xl p-5 sm:p-6 flex flex-wrap sm:flex-nowrap items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-button/10 flex items-center justify-center shrink-0">
                 <FileText className="w-6 h-6 text-button" />
               </div>
@@ -185,7 +185,7 @@ export default async function FormationDetailPage({ params }: Props) {
         </div>
 
         {/* Sidebar */}
-        <div>
+        <div className={hasAccess ? 'order-2' : 'order-1 lg:order-2'}>
           <div className="bg-card rounded-2xl border border-border p-6 space-y-6 sticky top-24">
             {/* Thumbnail placeholder */}
             <div className="aspect-video bg-gradient-to-br from-button/10 to-primary/40 rounded-xl flex items-center justify-center overflow-hidden">

@@ -50,7 +50,7 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" }:
       }}
     >
       <div
-        className={`${sizeClasses[size]} w-full bg-card rounded-2xl shadow-xl border border-border p-6 relative animate-in fade-in zoom-in-95 duration-200`}
+        className={`${sizeClasses[size]} w-full bg-card rounded-2xl shadow-xl border border-border p-5 sm:p-6 relative animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto`}
       >
         {title && (
           <div className="flex items-center justify-between mb-4">

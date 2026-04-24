@@ -519,7 +519,7 @@ export default function AdminFormationsPage() {
           <button onClick={() => setToast(null)} className="text-muted hover:text-heading text-xs cursor-pointer">✕</button>
         </div>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-3xl font-bold text-heading mb-2">
             Gestion des formations
@@ -528,7 +528,7 @@ export default function AdminFormationsPage() {
             {formations.length} formation{formations.length > 1 ? "s" : ""} au total
           </p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} className="self-start sm:self-auto">
           <Plus className="w-4 h-4" />
           Nouvelle formation
         </Button>

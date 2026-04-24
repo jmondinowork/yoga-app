@@ -79,7 +79,7 @@ export default function TarifsClient({ subscriptionPlans = defaultSubscriptionPl
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as "cours" | "formations")}
-              className={`px-8 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
+              className={`px-5 sm:px-8 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 ${
                 activeTab === tab.id
                   ? "bg-card text-heading shadow-sm"
                   : "text-muted hover:text-text"

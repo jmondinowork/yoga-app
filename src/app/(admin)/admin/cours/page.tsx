@@ -579,7 +579,7 @@ export default function AdminCoursPage() {
           <button onClick={() => setToast(null)} className="text-muted hover:text-heading text-xs cursor-pointer">✕</button>
         </div>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-3xl font-bold text-heading mb-2">
             Gestion des cours
@@ -588,7 +588,7 @@ export default function AdminCoursPage() {
             {courses.length} cours au total
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <Button variant="outline" onClick={() => { setThemeError(""); setShowThemeModal(true); }}>
             <Tags className="w-4 h-4" />
             Gérer les thèmes
@@ -748,13 +748,13 @@ export default function AdminCoursPage() {
                   <th className="text-left p-4 text-sm font-medium text-heading">
                     Durée
                   </th>
-                  <th className="text-left p-4 text-sm font-medium text-heading">
+                  <th className="text-left p-4 text-sm font-medium text-heading hidden sm:table-cell">
                     Prix
                   </th>
-                  <th className="text-left p-4 text-sm font-medium text-heading">
+                  <th className="text-left p-4 text-sm font-medium text-heading hidden sm:table-cell">
                     Abo
                   </th>
-                  <th className="text-left p-4 text-sm font-medium text-heading">
+                  <th className="text-left p-4 text-sm font-medium text-heading hidden sm:table-cell">
                     Location
                   </th>
                   <th className="text-left p-4 text-sm font-medium text-heading">
@@ -795,14 +795,14 @@ export default function AdminCoursPage() {
                     <td className="p-4 text-sm text-text">
                       {course.duration} min
                     </td>
-                    <td className="p-4 text-sm text-text">
+                    <td className="p-4 text-sm text-text hidden sm:table-cell">
                       {course.price ? (
                         `${course.price} €`
                       ) : (
                         <span className="text-muted">—</span>
                       )}
                     </td>
-                    <td className="p-4">
+                    <td className="p-4 hidden sm:table-cell">
                       <button
                         onClick={() => handleToggleSubscription(course)}
                         className="cursor-pointer"
@@ -819,7 +819,7 @@ export default function AdminCoursPage() {
                         )}
                       </button>
                     </td>
-                    <td className="p-4">
+                    <td className="p-4 hidden sm:table-cell">
                       <button
                         onClick={() => handleToggleRental(course)}
                         className="cursor-pointer"

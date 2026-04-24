@@ -16,7 +16,7 @@ const content: Record<string, string> = {
   about_value_2_title: "Accessibilité",
   about_value_2_desc: "Des cours pour tous les niveaux, du débutant à l'avancé.",
   about_value_3_title: "Expertise",
-  about_value_3_desc: "10+ ans d'expérience et une certification RYT 500.",
+  about_value_3_desc: "15+ ans d'expérience et une certification RYT 500.",
   about_value_4_title: "Authenticité",
   about_value_4_desc: "Un enseignement fidèle aux traditions yogiques.",
 

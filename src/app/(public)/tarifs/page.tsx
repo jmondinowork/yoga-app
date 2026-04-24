@@ -69,10 +69,10 @@ export default async function TarifsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
       {/* Header */}
       <div className="text-center mb-14">
-        <h1 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
+        <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-heading mb-4">
           {c["pricing_heading"] ?? "Nos Tarifs"}
         </h1>
         <p className="text-lg text-text max-w-2xl mx-auto">

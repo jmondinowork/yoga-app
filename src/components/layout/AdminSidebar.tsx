@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -13,6 +14,8 @@ import {
   ArrowLeft,
   CalendarDays,
   Blocks,
+  Menu,
+  X,
 } from "lucide-react";
 
 const adminLinks = [
@@ -27,14 +30,13 @@ const adminLinks = [
   { href: "/admin/parametres", label: "Paramètres", icon: Settings },
 ];
 
-export default function AdminSidebar() {
-  const pathname = usePathname();
-
+function SidebarContent({ pathname, onLinkClick }: { pathname: string; onLinkClick?: () => void }) {
   return (
-    <aside className="w-64 min-h-screen bg-card border-r border-border p-6 flex flex-col">
+    <div className="flex flex-col h-full">
       <div className="mb-8">
         <Link
           href="/"
+          onClick={onLinkClick}
           className="flex items-center gap-2 text-muted hover:text-heading transition-colors text-sm"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -55,6 +57,7 @@ export default function AdminSidebar() {
               key={link.href}
               href={link.href}
               prefetch={false}
+              onClick={onLinkClick}
               className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                 isActive
                   ? "bg-button text-white"
@@ -67,6 +70,46 @@ export default function AdminSidebar() {
           );
         })}
       </nav>
-    </aside>
+    </div>
+  );
+}
+
+export default function AdminSidebar() {
+  const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <>
+      {/* Mobile header bar */}
+      <div className="lg:hidden sticky top-0 z-40 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+        <h2 className="font-heading text-lg font-bold text-heading">Administration</h2>
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="p-2 rounded-xl hover:bg-primary/30 transition-colors cursor-pointer"
+          aria-label="Menu"
+        >
+          {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+      </div>
+
+      {/* Mobile overlay sidebar */}
+      {isOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div className="w-72 max-w-[85vw] bg-card border-r border-border p-6 flex flex-col overflow-y-auto">
+            <SidebarContent pathname={pathname} onLinkClick={() => setIsOpen(false)} />
+          </div>
+          <div
+            className="flex-1 bg-heading/30 backdrop-blur-sm"
+            onClick={() => setIsOpen(false)}
+          />
+        </div>
+      )}
+
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex w-64 min-h-screen bg-card border-r border-border p-6 flex-col">
+        <SidebarContent pathname={pathname} />
+      </aside>
+    </>
   );
 }

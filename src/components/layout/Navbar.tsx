@@ -44,7 +44,7 @@ export default function Navbar({ user, logoUrl }: NavbarProps) {
                 <div className="w-9 h-9 rounded-full bg-button flex items-center justify-center">
                   <span className="text-white font-heading text-lg font-bold">Y</span>
                 </div>
-                <span className="font-heading text-2xl font-bold text-heading group-hover:text-button transition-colors">
+                <span className="font-heading text-lg sm:text-2xl font-bold text-heading group-hover:text-button transition-colors">
                   Prana Motion Yoga
                 </span>
               </>
@@ -157,6 +157,14 @@ export default function Navbar({ user, logoUrl }: NavbarProps) {
                       </Button>
                     </Link>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => { setIsOpen(false); signOut({ callbackUrl: "/" }); }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-muted hover:bg-primary/30 hover:text-heading transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Se déconnecter
+                  </button>
                 </>
               ) : (
                 <>

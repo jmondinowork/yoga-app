@@ -205,7 +205,7 @@ export default function AdminCalendrierPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-3xl font-bold text-heading">
             Calendrier des cours en ligne
@@ -214,7 +214,7 @@ export default function AdminCalendrierPage() {
             Gérez vos cours en direct
           </p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} className="self-start sm:self-auto">
           <Plus className="w-4 h-4" />
           Nouvel événement
         </Button>
@@ -258,10 +258,10 @@ export default function AdminCalendrierPage() {
                   <th className="text-left px-4 py-3 font-medium text-heading">
                     Date / Heure
                   </th>
-                  <th className="text-left px-4 py-3 font-medium text-heading">
+                  <th className="text-left px-4 py-3 font-medium text-heading hidden sm:table-cell">
                     Récurrence
                   </th>
-                  <th className="text-center px-4 py-3 font-medium text-heading">
+                  <th className="text-center px-4 py-3 font-medium text-heading hidden sm:table-cell">
                     Inscrits
                   </th>
                   <th className="text-center px-4 py-3 font-medium text-heading">
@@ -299,7 +299,7 @@ export default function AdminCalendrierPage() {
                         {event.duration} min
                       </p>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 hidden sm:table-cell">
                       <div className="flex items-center gap-1.5">
                         {event.recurrence !== "NONE" && (
                           <Repeat className="w-3.5 h-3.5 text-button" />
@@ -309,7 +309,7 @@ export default function AdminCalendrierPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-4 py-3 text-center hidden sm:table-cell">
                       <div className="flex items-center justify-center gap-1">
                         <Users className="w-3.5 h-3.5 text-muted" />
                         <span className="text-text">

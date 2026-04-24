@@ -61,6 +61,10 @@ model User {
   invitationToken   String?   @unique
   invitationExpires DateTime?
 
+  // Réinitialisation du mot de passe
+  resetPasswordToken   String?   @unique
+  resetPasswordExpires DateTime?
+
   // Préférences de notifications email
   notifNewCourses  Boolean   @default(true)
   notifEventReminders Boolean @default(true)

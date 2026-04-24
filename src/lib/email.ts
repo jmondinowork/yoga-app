@@ -426,3 +426,83 @@ export async function sendNewFormationNotification(opts: {
     console.error(`[EMAIL] ${failed}/${opts.recipients.length} emails failed for new formation`);
   }
 }
+
+// ─── Email: réinitialisation du mot de passe ───────────────────────
+
+export function resetPasswordEmailHtml(opts: {
+  resetUrl: string;
+}): string {
+  const content = `
+    <!-- Greeting -->
+    <p style="margin:0 0 6px;color:${C.muted};font-size:13px;text-transform:uppercase;letter-spacing:1px;">
+      Sécurité du compte
+    </p>
+    <h2 style="margin:0 0 24px;color:${C.heading};font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:normal;line-height:1.2;">
+      Réinitialisation de<br/>votre mot de passe 🔐
+    </h2>
+
+    <p style="margin:0 0 28px;color:${C.text};font-size:15px;line-height:1.7;">
+      Bonjour,<br/><br/>
+      Nous avons reçu une demande de réinitialisation du mot de passe associé à votre compte Prana Motion.
+      Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe.
+    </p>
+
+    <!-- Info card -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+           style="background:${C.accentLight};border-radius:16px;border:1px solid ${C.accentMid};margin-bottom:28px;">
+      <tr>
+        <td style="padding:24px 28px;">
+          <p style="margin:0 0 8px;">
+            <span style="display:inline-block;background:${C.primary};color:${C.text};font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;">Lien sécurisé</span>
+          </p>
+          <p style="margin:0;color:${C.muted};font-size:13px;line-height:1.6;">
+            ⏱&nbsp; Ce lien expire dans <strong>1 heure</strong><br/>
+            🔒&nbsp; À usage unique — il sera invalidé après utilisation
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- CTA -->
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+      <tr>
+        <td align="center">
+          <a href="${opts.resetUrl}"
+             style="display:inline-block;background-color:${C.button};color:${C.buttonText};text-decoration:none;padding:16px 40px;border-radius:12px;font-size:15px;font-weight:600;letter-spacing:0.3px;">
+            Réinitialiser mon mot de passe →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Security note -->
+    <p style="margin:28px 0 0;color:${C.muted};font-size:13px;text-align:center;line-height:1.7;">
+      Si vous n'êtes pas à l'origine de cette demande,<br/>
+      ignorez cet email — votre mot de passe restera inchangé.
+    </p>
+
+    <!-- Signature -->
+    <p style="margin:24px 0 0;color:${C.muted};font-size:13px;text-align:center;line-height:1.7;">
+      Prenez soin de vous,<br/>
+      <strong style="color:${C.heading};font-family:Georgia,serif;font-size:15px;">Mathilde Torrez</strong>
+    </p>`;
+
+  return baseLayout(
+    content,
+    "Réinitialisez votre mot de passe Prana Motion"
+  );
+}
+
+export async function sendResetPasswordEmail(opts: {
+  email: string;
+  resetUrl: string;
+}) {
+  if (!process.env.RESEND_API_KEY) return;
+
+  await resend.emails.send({
+    from: FROM,
+    to: opts.email,
+    subject: "Réinitialisation de votre mot de passe",
+    html: resetPasswordEmailHtml({ resetUrl: opts.resetUrl }),
+  });
+}

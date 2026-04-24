@@ -50,7 +50,7 @@ export default function ConnexionPage() {
         </Link>
       </div>
 
-      <div className="bg-card rounded-3xl border border-border p-8 shadow-sm space-y-6">
+      <div className="bg-card rounded-3xl border border-border p-5 sm:p-8 shadow-sm space-y-6">
         <div className="text-center space-y-2">
           <h1 className="font-heading text-3xl font-bold text-heading">
             Bon retour 🙏
@@ -98,6 +98,14 @@ export default function ConnexionPage() {
             <LogIn className="w-4 h-4" />
             Se connecter
           </Button>
+          <div className="text-center">
+            <Link
+              href="/mot-de-passe-oublie"
+              className="text-sm text-muted hover:text-button hover:underline"
+            >
+              Mot de passe oublié ?
+            </Link>
+          </div>
         </form>
 
         <div className="text-center text-sm text-muted">

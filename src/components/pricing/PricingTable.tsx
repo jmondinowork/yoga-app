@@ -44,9 +44,9 @@ export default function PricingTable({ plans = defaultPlans }: PricingTableProps
         return (
           <div
             key={index}
-            className={`relative bg-card rounded-2xl border-2 p-8 flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
+            className={`relative bg-card rounded-2xl border-2 p-6 sm:p-8 flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
               isPopular
-                ? "border-button shadow-md scale-[1.02]"
+                ? "border-button shadow-md lg:scale-[1.02]"
                 : "border-border"
             }`}
           >

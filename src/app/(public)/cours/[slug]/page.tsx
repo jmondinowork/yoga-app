@@ -105,7 +105,7 @@ export default async function CourseDetailPage({ params }: Props) {
 
       <div className="grid lg:grid-cols-3 gap-10">
         {/* Main content */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className={`lg:col-span-2 space-y-8 ${hasAccess ? 'order-1' : 'order-2 lg:order-1'}`}>
           <VideoPlayer
             apiUrl={`/api/cours/${course.slug}/video-url`}
             thumbnail={thumbnailUrl}
@@ -132,7 +132,7 @@ export default async function CourseDetailPage({ params }: Props) {
               {course.title}
             </h1>
 
-            <div className="flex items-center gap-6 text-sm text-muted">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted">
               <span className="flex items-center gap-1.5">
                 <Clock className="w-4 h-4" />
                 {course.duration} minutes
@@ -171,7 +171,7 @@ export default async function CourseDetailPage({ params }: Props) {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
+        <div className={`space-y-6 ${hasAccess ? 'order-2' : 'order-1 lg:order-2'}`}>
           <div className="bg-card rounded-2xl border border-border overflow-hidden sticky top-24">
             {/* Thumbnail */}
             <div className="relative aspect-video bg-gradient-to-br from-button/10 to-primary/40 flex items-center justify-center overflow-hidden">

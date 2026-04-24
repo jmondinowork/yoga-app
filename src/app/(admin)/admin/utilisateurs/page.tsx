@@ -137,7 +137,7 @@ export default function AdminUtilisateursPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-3xl font-bold text-heading mb-2">
             Gestion des utilisateurs
@@ -146,7 +146,7 @@ export default function AdminUtilisateursPage() {
         </div>
         <button
           onClick={() => { resetInviteModal(); setShowInviteModal(true); }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-button text-white text-sm font-medium hover:bg-button/90 transition-colors cursor-pointer"
+          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-button text-white text-sm font-medium hover:bg-button/90 transition-colors cursor-pointer"
         >
           <UserPlus className="w-4 h-4" />
           Inviter un utilisateur
@@ -332,8 +332,8 @@ export default function AdminUtilisateursPage() {
                 <th className="text-left p-4 text-sm font-medium text-heading">Utilisateur</th>
                 <th className="text-left p-4 text-sm font-medium text-heading">Rôle</th>
                 <th className="text-left p-4 text-sm font-medium text-heading">Abonnement</th>
-                <th className="text-left p-4 text-sm font-medium text-heading">Achats</th>
-                <th className="text-left p-4 text-sm font-medium text-heading">Inscription</th>
+                <th className="text-left p-4 text-sm font-medium text-heading hidden sm:table-cell">Achats</th>
+                <th className="text-left p-4 text-sm font-medium text-heading hidden sm:table-cell">Inscription</th>
                 <th className="text-right p-4 text-sm font-medium text-heading">Actions</th>
               </tr>
             </thead>
@@ -390,14 +390,14 @@ export default function AdminUtilisateursPage() {
                         <span className="text-sm text-muted">—</span>
                       )}
                     </td>
-                    <td className="p-4 text-sm text-text">
+                    <td className="p-4 text-sm text-text hidden sm:table-cell">
                       {user._count.purchases > 0 ? (
                         <span>{user._count.purchases} achat{user._count.purchases > 1 ? "s" : ""}</span>
                       ) : (
                         <span className="text-muted">—</span>
                       )}
                     </td>
-                    <td className="p-4 text-sm text-text">
+                    <td className="p-4 text-sm text-text hidden sm:table-cell">
                       {new Date(user.createdAt).toLocaleDateString("fr-FR")}
                     </td>
                     <td className="p-4">

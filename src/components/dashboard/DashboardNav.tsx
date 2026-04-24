@@ -15,7 +15,7 @@ export default function DashboardNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="space-y-1">
+    <nav className="flex flex-row lg:flex-col gap-1 overflow-x-auto pb-1 lg:pb-0">
       {dashboardLinks.map((link) => {
         const Icon = link.icon;
         const isActive =
@@ -27,13 +27,13 @@ export default function DashboardNav() {
           <Link
             key={link.href}
             href={link.href}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 lg:gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors whitespace-nowrap ${
               isActive
                 ? "bg-button text-background"
                 : "text-text hover:bg-primary/40 hover:text-heading"
             }`}
           >
-            <Icon className="w-4 h-4" />
+            <Icon className="w-4 h-4 shrink-0" />
             {link.label}
           </Link>
         );

@@ -29,7 +29,7 @@ export default async function CalendrierPage() {
     <section className="py-12 lg:py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
-          <h1 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
+          <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-heading mb-4">
             {c["calendrier_page_heading"] ?? "Cours en direct"}
           </h1>
           <p className="text-text text-lg max-w-2xl mx-auto">

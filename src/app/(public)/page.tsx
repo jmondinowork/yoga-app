@@ -216,7 +216,7 @@ export default async function HomePage() {
                 {c["homepage_hero_badge"] ?? "Nouveaux cours chaque semaine"}
               </div>
 
-              <h1 className="font-heading text-5xl lg:text-7xl font-bold text-heading leading-[1.1]">
+              <h1 className="font-heading text-4xl sm:text-5xl lg:text-7xl font-bold text-heading leading-[1.1]">
                 {c["homepage_hero_title"] ?? (
                   <>
                     Trouvez votre{" "}
@@ -247,7 +247,7 @@ export default async function HomePage() {
               </div>
 
               {/* Stats */}
-              <div className="flex gap-8 pt-4">
+              <div className="flex flex-wrap gap-4 sm:gap-8 pt-4">
                 <div>
                   <p className="font-heading text-3xl font-bold text-heading">{stat1Num}</p>
                   <p className="text-sm text-muted">{stat1Label}</p>
@@ -286,9 +286,9 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ À PROPOS ═══ */}
-      <section className="py-20 lg:py-28 bg-card">
+      <section className="py-14 lg:py-28 bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Photo placeholder */}
             <div className="relative">
               <div className="aspect-[4/5] rounded-3xl bg-gradient-to-br from-primary/60 to-accent-light/40 overflow-hidden">
@@ -300,7 +300,7 @@ export default async function HomePage() {
                   </div>
                 )}
               </div>
-              <div className="absolute -bottom-6 -right-6 bg-button text-white p-6 rounded-2xl shadow-lg">
+              <div className="absolute -bottom-4 -right-4 sm:-bottom-6 sm:-right-6 bg-button text-white p-4 sm:p-6 rounded-2xl shadow-lg">
                 <p className="font-heading text-3xl font-bold">10+</p>
                 <p className="text-sm opacity-80">années d&apos;expérience</p>
               </div>
@@ -348,13 +348,13 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ COURS POPULAIRES ═══ */}
-      <section className="py-20 lg:py-28">
+      <section className="py-14 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
+          <div className="text-center mb-10 lg:mb-14">
             <p className="text-button text-sm font-medium uppercase tracking-wider mb-3">
               Nos cours
             </p>
-            <h2 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
+            <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-heading mb-4">
               Cours populaires
             </h2>
             <p className="text-text text-lg max-w-2xl mx-auto">
@@ -380,13 +380,13 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ COMMENT ÇA MARCHE ═══ */}
-      <section className="py-20 lg:py-28 bg-gradient-to-br from-accent-light/30 to-primary/20">
+      <section className="py-14 lg:py-28 bg-gradient-to-br from-accent-light/30 to-primary/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <p className="text-button text-sm font-medium uppercase tracking-wider mb-3">
               {c["homepage_how_label"] ?? "Simple & rapide"}
             </p>
-            <h2 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
+            <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-heading mb-4">
               {c["homepage_how_heading"] ?? "Comment ça marche ?"}
             </h2>
           </div>
@@ -444,13 +444,13 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ COURS EN DIRECT ═══ */}
-      <section className="py-20 lg:py-28 bg-card">
+      <section className="py-14 lg:py-28 bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <p className="text-button text-sm font-medium uppercase tracking-wider mb-3">
               En direct
             </p>
-            <h2 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
+            <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-heading mb-4">
               {c["homepage_calendar_heading"] ?? "Rejoignez nos cours en direct"}
             </h2>
             <p className="text-text text-lg max-w-2xl mx-auto">
@@ -533,13 +533,13 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ TARIFS ═══ */}
-      <section id="pricing" className="py-20 lg:py-28">
+      <section id="pricing" className="py-14 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <p className="text-button text-sm font-medium uppercase tracking-wider mb-3">
               Tarifs
             </p>
-            <h2 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
+            <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-heading mb-4">
               Un plan pour chaque pratique
             </h2>
             <p className="text-text text-lg max-w-2xl mx-auto">
@@ -558,13 +558,13 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ TÉMOIGNAGES ═══ */}
-      <section className="py-20 lg:py-28 bg-card">
+      <section className="py-14 lg:py-28 bg-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <p className="text-button text-sm font-medium uppercase tracking-wider mb-3">
               Témoignages
             </p>
-            <h2 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
+            <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-heading mb-4">
               Ce que disent nos élèves
             </h2>
           </div>
@@ -574,10 +574,10 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ THÈMES ═══ */}
-      <section className="py-20 lg:py-28">
+      <section className="py-14 lg:py-28">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
-            <h2 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
+            <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-heading mb-4">
               Explorez nos thèmes
             </h2>
           </div>
@@ -600,13 +600,13 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ FAQ ═══ */}
-      <section className="py-20 lg:py-28 bg-card">
+      <section className="py-14 lg:py-28 bg-card">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
             <p className="text-button text-sm font-medium uppercase tracking-wider mb-3">
               FAQ
             </p>
-            <h2 className="font-heading text-4xl lg:text-5xl font-bold text-heading mb-4">
+            <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-heading mb-4">
               Questions fréquentes
             </h2>
           </div>
@@ -616,9 +616,9 @@ export default async function HomePage() {
       </section>
 
       {/* ═══ CTA FINAL ═══ */}
-      <section className="py-20 lg:py-28 bg-gradient-to-r from-button to-button/80">
+      <section className="py-14 lg:py-28 bg-gradient-to-r from-button to-button/80">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-8">
-          <h2 className="font-heading text-4xl lg:text-5xl font-bold text-white">
+          <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-white">
             {c["homepage_cta_heading"] ?? "Prêt(e) à commencer votre voyage ?"}
           </h2>
           <p className="text-lg text-white/80 max-w-2xl mx-auto">
