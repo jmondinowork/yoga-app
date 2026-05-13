@@ -21,6 +21,19 @@ const r2Client = new S3Client({
   },
 });
 
+export async function getPresignedUploadUrl(
+  key: string,
+  contentType: string,
+  expiresInSeconds: number = 3600
+): Promise<string> {
+  const command = new PutObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: key,
+    ContentType: contentType,
+  });
+  return getSignedUrl(r2Client, command, { expiresIn: expiresInSeconds });
+}
+
 /**
  * Génère une URL présignée temporaire pour accéder à un fichier sur R2.
  */

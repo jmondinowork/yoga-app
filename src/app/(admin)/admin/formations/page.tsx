@@ -122,27 +122,28 @@ export default function AdminFormationsPage() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
 
-  function uploadWithProgress(
-    fd: FormData,
+  // Upload direct vers R2 via URL présignée — contourne la limite Vercel (4.5 Mo)
+  function uploadDirectToR2(
+    uploadUrl: string,
+    file: File,
     onProgress: (pct: number) => void
-  ): Promise<{ key: string }> {
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/admin/upload");
+      xhr.open("PUT", uploadUrl);
+      xhr.setRequestHeader("Content-Type", "video/mp4");
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
       };
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText));
+          resolve();
         } else {
-          let msg = "Erreur upload";
-          try { msg = JSON.parse(xhr.responseText).error || msg; } catch { /* non-JSON response (e.g. 413) */ }
-          reject(new Error(msg));
+          reject(new Error(`Erreur upload vidéo (${xhr.status})`));
         }
       };
-      xhr.onerror = () => reject(new Error("Erreur réseau"));
-      xhr.send(fd);
+      xhr.onerror = () => reject(new Error("Erreur réseau lors de l'upload vidéo"));
+      xhr.send(file);
     });
   }
 
@@ -294,7 +295,7 @@ export default function AdminFormationsPage() {
         bookletKey = (await res.json()).key;
       }
 
-      // Upload vidéos
+      // Upload vidéos — direct vers R2 via URL présignée (pas de limite de taille)
       const videoKeys: Record<number, string> = {};
       const videoEntries = Object.entries(videoFiles);
       for (let ei = 0; ei < videoEntries.length; ei++) {
@@ -303,31 +304,33 @@ export default function AdminFormationsPage() {
         const video = form.videos[index];
         if (!video) continue;
 
-        const isMp4 = file.type === "video/mp4";
         const sortOrder = String(index + 1).padStart(2, "0");
         const name = sanitizeFilename(video.title || "video");
         const videoFilename = `${sortOrder}-${name}.mp4`;
 
-        setUploadPercent(0);
-        setUploadProgress(`Envoi vidéo ${ei + 1}/${videoEntries.length}…`);
-        const fd = new FormData();
-        fd.append("file", file);
-        fd.append("type", "formation-video");
-        fd.append("slug", form.slug);
-        fd.append("videoFilename", videoFilename);
-        const { key } = await uploadWithProgress(fd, (pct) => {
-          if (pct < 100) {
-            setUploadPercent(pct);
-            setUploadProgress(`Envoi vidéo ${ei + 1}/${videoEntries.length}… ${pct}%`);
-          } else {
-            setUploadPercent(null);
-            setUploadProgress(isMp4
-              ? `Traitement vidéo ${ei + 1}/${videoEntries.length}…`
-              : `Conversion vidéo ${ei + 1}/${videoEntries.length} en MP4…`);
-          }
+        // 1. Obtenir l'URL présignée depuis le serveur
+        setUploadProgress(`Préparation vidéo ${ei + 1}/${videoEntries.length}…`);
+        const presignRes = await fetch("/api/admin/upload/video-presign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug: form.slug, videoFilename }),
         });
-        videoKeys[index] = key;
+        if (!presignRes.ok) {
+          let msg = "Erreur préparation upload vidéo";
+          try { msg = (await presignRes.json()).error || msg; } catch { /* non-JSON */ }
+          throw new Error(msg);
+        }
+        const { key, uploadUrl } = await presignRes.json();
+
+        // 2. Upload direct vers R2 avec suivi de progression
+        setUploadPercent(0);
+        setUploadProgress(`Envoi vidéo ${ei + 1}/${videoEntries.length}… 0%`);
+        await uploadDirectToR2(uploadUrl, file, (pct) => {
+          setUploadPercent(pct);
+          setUploadProgress(`Envoi vidéo ${ei + 1}/${videoEntries.length}… ${pct}%`);
+        });
         setUploadPercent(null);
+        videoKeys[index] = key;
       }
 
       setUploadProgress("Enregistrement...");
