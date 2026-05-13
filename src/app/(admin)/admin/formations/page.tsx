@@ -27,6 +27,7 @@ import Badge from "@/components/ui/Badge";
 import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
 import { compressImage } from "@/lib/helpers/compress-image";
+import { compressPdf } from "@/lib/helpers/compress-pdf";
 
 interface FormationVideo {
   id?: string;
@@ -133,8 +134,9 @@ export default function AdminFormationsPage() {
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve(JSON.parse(xhr.responseText));
         } else {
-          const err = JSON.parse(xhr.responseText || '{"error":"Erreur serveur"}');
-          reject(new Error(err.error || "Erreur upload"));
+          let msg = "Erreur upload";
+          try { msg = JSON.parse(xhr.responseText).error || msg; } catch { /* non-JSON response (e.g. 413) */ }
+          reject(new Error(msg));
         }
       };
       xhr.onerror = () => reject(new Error("Erreur réseau"));
@@ -237,23 +239,27 @@ export default function AdminFormationsPage() {
         fd.append("slug", form.slug);
         const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
         if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Erreur upload miniature");
+          let msg = "Erreur upload miniature";
+          try { msg = (await res.json()).error || msg; } catch { /* non-JSON response (e.g. 413) */ }
+          throw new Error(msg);
         }
         thumbnailKey = (await res.json()).key;
       }
 
       // Upload guide PDF
       if (guideFile) {
+        setUploadProgress("Compression du livret PDF...");
+        const compressedPdf = await compressPdf(guideFile);
         setUploadProgress("Upload du livret PDF...");
         const fd = new FormData();
-        fd.append("file", guideFile);
+        fd.append("file", compressedPdf);
         fd.append("type", "formation-guide");
         fd.append("slug", form.slug);
         const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
         if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error || "Erreur upload livret");
+          let msg = "Erreur upload livret";
+          try { msg = (await res.json()).error || msg; } catch { /* non-JSON response (e.g. 413) */ }
+          throw new Error(msg);
         }
         bookletKey = (await res.json()).key;
       }

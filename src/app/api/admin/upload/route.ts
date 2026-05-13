@@ -14,6 +14,7 @@ async function checkAdmin() {
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon', 'image/svg+xml'];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 Mo
+const MAX_PDF_SIZE = 4 * 1024 * 1024; // 4 Mo (Vercel serverless hard limit is 4.5 Mo)
 const ALLOWED_VIDEO_TYPES = [
   'video/mp4',
   'video/quicktime',      // .mov
@@ -235,6 +236,14 @@ export async function POST(req: NextRequest) {
 
     default:
       return NextResponse.json({ error: 'Type non reconnu' }, { status: 400 });
+  }
+
+  // Enforce size limit for PDF uploads (4 Mo)
+  if (ALLOWED_PDF_TYPES.includes(contentType) && file.size > MAX_PDF_SIZE) {
+    return NextResponse.json(
+      { error: `Le PDF est trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} Mo). Taille maximale : 4 Mo.` },
+      { status: 400 }
+    );
   }
 
   // Enforce size limit for image uploads (5 Mo)
