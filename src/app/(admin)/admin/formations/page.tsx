@@ -245,14 +245,28 @@ export default function AdminFormationsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    // Garde-fous avant de commencer les uploads
+    // Validation client avant de lancer les uploads
     if (pdfCompressing) {
       setError("Le PDF est en cours de compression, veuillez patienter.");
+      return;
+    }
+    if (!form.title || form.title.trim().length < 3) {
+      setError("Le titre doit contenir au moins 3 caractères.");
       return;
     }
     if (!form.slug || form.slug.length < 3) {
       setError("Le titre est trop court pour générer un slug valide.");
       return;
+    }
+    if (!form.description || form.description.trim().length < 10) {
+      setError("La description est trop courte (minimum 10 caractères).");
+      return;
+    }
+    for (let i = 0; i < form.videos.length; i++) {
+      if (!form.videos[i].title || form.videos[i].title.trim().length < 3) {
+        setError(`La vidéo ${i + 1} doit avoir un titre d'au moins 3 caractères.`);
+        return;
+      }
     }
 
     setSaving(true);
@@ -367,7 +381,10 @@ export default function AdminFormationsPage() {
 
       if (!res.ok) {
         let msg = "Une erreur est survenue";
-        try { msg = (await res.json()).error || msg; } catch { /* non-JSON (503, timeout…) */ }
+        try {
+          const data = await res.json();
+          msg = data.details?.[0]?.message || data.error || msg;
+        } catch { /* non-JSON (503, timeout…) */ }
         setError(msg);
         return;
       }

@@ -37,12 +37,17 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ error: "Paramètre 'filename' requis" }, { status: 400 });
   }
 
-  // Sécurité : whitelist de caractères autorisés (lettres, chiffres, tirets, points, underscores)
-  if (!/^[a-zA-Z0-9._-]+$/.test(filename)) {
+  // Sécurité : pas de path traversal
+  if (filename.includes("..") || !/^[a-zA-Z0-9./_-]+$/.test(filename)) {
     return NextResponse.json({ error: "Nom de fichier invalide" }, { status: 400 });
   }
 
-  const key = `formations/${formation.slug}/videos/${filename}`;
+  // Support des deux formats :
+  // - chemin complet "formations/slug/videos/file.mp4" (upload direct R2)
+  // - nom seul "file.mp4" (ancien format via serveur)
+  const key = filename.startsWith("formations/")
+    ? filename
+    : `formations/${formation.slug}/videos/${filename}`;
   const url = await getPresignedUrl(key);
 
   return NextResponse.json({ url });
