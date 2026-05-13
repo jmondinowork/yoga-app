@@ -19,6 +19,9 @@ const r2Client = new S3Client({
     accessKeyId: R2_ACCESS_KEY_ID,
     secretAccessKey: R2_SECRET_ACCESS_KEY,
   },
+  // Désactive les checksums automatiques (CRC32) qui bloquent les uploads présignés depuis le browser
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
 });
 
 export async function getPresignedUploadUrl(
