@@ -27,7 +27,7 @@ import Badge from "@/components/ui/Badge";
 import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
 import { compressImage } from "@/lib/helpers/compress-image";
-import { compressPdf } from "@/lib/helpers/compress-pdf";
+import { compressPdf } from "@/lib/helpers/compress-pdf"; // used in handlePdfSelect (eager read on file selection)
 
 interface FormationVideo {
   id?: string;
@@ -112,6 +112,8 @@ export default function AdminFormationsPage() {
   // File uploads
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [guideFile, setGuideFile] = useState<File | null>(null);
+  const [guideBlob, setGuideBlob] = useState<Blob | null>(null);
+  const [pdfCompressing, setPdfCompressing] = useState(false);
   const [videoFiles, setVideoFiles] = useState<Record<number, File>>({});
   const [uploadProgress, setUploadProgress] = useState("");
   const [uploadPercent, setUploadPercent] = useState<number | null>(null);
@@ -164,6 +166,23 @@ export default function AdminFormationsPage() {
       .trim();
   }
 
+  async function handlePdfSelect(file: File) {
+    setGuideFile(file);
+    setGuideBlob(null);
+    setPdfCompressing(true);
+    setError("");
+    try {
+      const compressed = await compressPdf(file);
+      setGuideBlob(compressed);
+    } catch (err) {
+      setGuideFile(null);
+      setGuideBlob(null);
+      setError(err instanceof Error ? err.message : "Erreur compression PDF");
+    } finally {
+      setPdfCompressing(false);
+    }
+  }
+
   function openCreate() {
     setEditingId(null);
     setForm(emptyFormation);
@@ -171,6 +190,7 @@ export default function AdminFormationsPage() {
     setExpandedVideos({});
     setThumbnailFile(null);
     setGuideFile(null);
+    setGuideBlob(null);
     setVideoFiles({});
     setUploadProgress("");
     setThumbnailPreviewUrl(null);
@@ -193,6 +213,7 @@ export default function AdminFormationsPage() {
     setExpandedVideos({});
     setThumbnailFile(null);
     setGuideFile(null);
+    setGuideBlob(null);
     setVideoFiles({});
     setUploadProgress("");
     setThumbnailPreviewUrl(null);
@@ -222,6 +243,17 @@ export default function AdminFormationsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // Garde-fous avant de commencer les uploads
+    if (pdfCompressing) {
+      setError("Le PDF est en cours de compression, veuillez patienter.");
+      return;
+    }
+    if (!form.slug || form.slug.length < 3) {
+      setError("Le titre est trop court pour générer un slug valide.");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -246,13 +278,11 @@ export default function AdminFormationsPage() {
         thumbnailKey = (await res.json()).key;
       }
 
-      // Upload guide PDF
-      if (guideFile) {
-        setUploadProgress("Compression du livret PDF...");
-        const compressedPdf = await compressPdf(guideFile);
+      // Upload guide PDF (guideBlob est déjà compressé depuis la sélection)
+      if (guideFile && guideBlob) {
         setUploadProgress("Upload du livret PDF...");
         const fd = new FormData();
-        fd.append("file", compressedPdf);
+        fd.append("file", guideBlob, guideFile.name);
         fd.append("type", "formation-guide");
         fd.append("slug", form.slug);
         const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
@@ -333,14 +363,16 @@ export default function AdminFormationsPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Une erreur est survenue");
+        let msg = "Une erreur est survenue";
+        try { msg = (await res.json()).error || msg; } catch { /* non-JSON (503, timeout…) */ }
+        setError(msg);
         return;
       }
 
       setShowModal(false);
       setThumbnailFile(null);
       setGuideFile(null);
+      setGuideBlob(null);
       setVideoFiles({});
       setToast(editingId ? "Formation modifiée avec succès ✓" : "Formation créée avec succès ✓");
       setTimeout(() => setToast(null), 3000);
@@ -796,7 +828,9 @@ export default function AdminFormationsPage() {
                 <div className="rounded-xl border border-border overflow-hidden bg-card">
                   <div className="flex items-center justify-between px-3 py-2 border-b border-border">
                     <span className="text-xs font-semibold text-heading">Livret PDF</span>
-                    {(form.bookletUrl || guideFile) ? (
+                    {pdfCompressing ? (
+                      <span className="text-xs text-amber-600 font-medium">Compression…</span>
+                    ) : (form.bookletUrl || guideFile) ? (
                       <span className="text-xs text-green-600 font-medium">✓ {guideFile ? "Nouveau" : "Actuel"}</span>
                     ) : (
                       <span className="text-xs text-muted">Vide</span>
@@ -804,7 +838,9 @@ export default function AdminFormationsPage() {
                   </div>
                   <div className="flex flex-col items-center justify-center aspect-[4/3] px-4">
                     <FileText className="w-6 h-6 text-muted/50 mb-2" />
-                    {guideFile ? (
+                    {pdfCompressing ? (
+                      <span className="text-xs text-amber-600">Compression en cours…</span>
+                    ) : guideFile ? (
                       <span className="text-xs text-text truncate max-w-full">{guideFile.name}</span>
                     ) : form.bookletUrl ? (
                       <span className="text-xs text-text">PDF enregistré</span>
@@ -816,10 +852,10 @@ export default function AdminFormationsPage() {
                     <label className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-text py-1.5 rounded-lg border border-border bg-primary/10 hover:bg-primary/20 transition-colors cursor-pointer">
                       <Upload className="w-3 h-3" />
                       {guideFile ? "Changer" : form.bookletUrl ? "Remplacer" : "Ajouter"}
-                      <input type="file" accept="application/pdf" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setGuideFile(e.target.files[0]); }} />
+                      <input type="file" accept="application/pdf" className="hidden" onChange={(e) => { if (e.target.files?.[0]) handlePdfSelect(e.target.files[0]); }} />
                     </label>
                     {(form.bookletUrl || guideFile) && (
-                      <button type="button" onClick={() => { setGuideFile(null); setForm({ ...form, bookletUrl: "" }); }} className="flex items-center justify-center p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition-colors text-red-400 hover:text-red-600" title="Supprimer">
+                      <button type="button" onClick={() => { setGuideFile(null); setGuideBlob(null); setForm({ ...form, bookletUrl: "" }); }} className="flex items-center justify-center p-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 transition-colors text-red-400 hover:text-red-600" title="Supprimer">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -1035,8 +1071,8 @@ export default function AdminFormationsPage() {
           <Button type="button" variant="ghost" onClick={() => setShowModal(false)} disabled={saving}>
             Annuler
           </Button>
-          <Button type="submit" form="formation-form" disabled={saving}>
-            {saving ? "Traitement…" : editingId ? "Mettre à jour" : "Créer la formation"}
+          <Button type="submit" form="formation-form" disabled={saving || pdfCompressing}>
+            {saving ? "Traitement…" : pdfCompressing ? "Compression PDF…" : editingId ? "Mettre à jour" : "Créer la formation"}
           </Button>
         </div>
       </Modal>
