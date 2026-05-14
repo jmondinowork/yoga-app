@@ -19,6 +19,7 @@ interface ParametresClientProps {
   userName: string;
   userEmail: string;
   subscription: SubscriptionData | null;
+  subscriptionPrice?: number | null;
   notifNewCourses: boolean;
 }
 
@@ -41,6 +42,7 @@ export default function ParametresClient({
   userName,
   userEmail,
   subscription,
+  subscriptionPrice,
   notifNewCourses: initialNotifNewCourses,
 }: ParametresClientProps) {
   const router = useRouter();
@@ -194,7 +196,11 @@ export default function ParametresClient({
 
   // ─── Labels abonnement ────────────────────────────────────────────
   const planLabel = subscription?.plan === "ANNUAL" ? "annuel" : "mensuel";
-  const planPrice = subscription?.plan === "ANNUAL" ? "200 €/an (facturé annuellement)" : "22 €/mois";
+  const planPrice = subscription
+    ? subscription.plan === "ANNUAL"
+      ? `${subscriptionPrice ?? 200} €/an (facturé annuellement)`
+      : `${subscriptionPrice ?? 22} €/mois`
+    : "";
   const periodEnd = subscription
     ? new Date(subscription.currentPeriodEnd).toLocaleDateString("fr-FR", {
         day: "numeric",

@@ -50,6 +50,7 @@ const getDashboardData = unstable_cache(
       recentPurchases,
       allPurchases12m,
       subscriptions12m,
+      pricingPlans,
     ] = await Promise.all([
       prisma.user.count({ where: { role: Role.USER } }),
       prisma.user.count({ where: { role: Role.USER, createdAt: { gte: startOfMonth } } }),
@@ -114,6 +115,7 @@ const getDashboardData = unstable_cache(
         where: { status: "ACTIVE", user: { role: Role.USER } },
         select: { plan: true, createdAt: true, currentPeriodStart: true },
       }),
+      prisma.pricingPlan.findMany(),
     ]);
 
     // Build activity feed
@@ -150,6 +152,11 @@ const getDashboardData = unstable_cache(
     const formationPurchases12m = allPurchases12m.filter(p => p.formationId != null);
     const coursePurchases12m = allPurchases12m.filter(p => p.courseId != null);
 
+    const monthlyPlan = pricingPlans.find((plan) => plan.slug === "monthly");
+    const annualPlan = pricingPlans.find((plan) => plan.slug === "annual");
+    const monthlyPlanPrice = monthlyPlan?.price ?? 22;
+    const annualPlanPrice = annualPlan?.price ?? 200;
+
     const revenueByMonth: Record<string, number> = {};
     const chartLabels: string[] = [];
     for (let i = 0; i < 12; i++) {
@@ -164,7 +171,7 @@ const getDashboardData = unstable_cache(
       if (key in revenueByMonth) revenueByMonth[key] += p.amount;
     }
     for (const sub of subscriptions12m) {
-      const amount = sub.plan === "MONTHLY" ? 22 : 200;
+      const amount = sub.plan === "MONTHLY" ? monthlyPlanPrice : annualPlanPrice;
       const start = sub.currentPeriodStart ?? sub.createdAt;
       const key = `${start.getFullYear()}-${start.getMonth()}`;
       if (key in revenueByMonth) revenueByMonth[key] += amount;
@@ -177,7 +184,7 @@ const getDashboardData = unstable_cache(
       + subscriptions12m.filter(s => {
           const start = s.currentPeriodStart ?? s.createdAt;
           return start >= startOfMonth;
-        }).reduce((sum, s) => sum + (s.plan === "MONTHLY" ? 22 : 200), 0);
+        }).reduce((sum, s) => sum + (s.plan === "MONTHLY" ? monthlyPlanPrice : annualPlanPrice), 0);
     const monthlyValues = Object.values(revenueByMonth);
 
     const formationRevenueByMonth: Record<string, number> = {};

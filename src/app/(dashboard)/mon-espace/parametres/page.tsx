@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getPlans } from "@/lib/stripe";
 import ParametresClient from "./ParametresClient";
 
 export const metadata: Metadata = {
@@ -25,6 +26,11 @@ export default async function ParametresPage() {
     where: { userId: session.user.id },
   });
 
+  const plans = await getPlans();
+  const subscriptionPrice = subscription
+    ? plans.find((p) => p.id.toUpperCase() === subscription.plan)?.price ?? null
+    : null;
+
   const subscriptionData = subscription
     ? {
         plan: subscription.plan,
@@ -39,6 +45,7 @@ export default async function ParametresPage() {
       userName={user?.name || ""}
       userEmail={user?.email || ""}
       subscription={subscriptionData}
+      subscriptionPrice={subscriptionPrice}
       notifNewCourses={user?.notifNewCourses ?? true}
     />
   );
