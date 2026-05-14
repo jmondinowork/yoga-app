@@ -227,7 +227,7 @@ export default async function FormationDetailPage({ params }: Props) {
             <div className="border-t border-border pt-4 space-y-2 text-xs text-muted">
               <p>✓ {formation.videos.length} vidéo{formation.videos.length > 1 ? "s" : ""} exclusives</p>
               {formation.bookletUrl && <p>✓ Livret PDF inclus</p>}
-              <p>✓ Accompagnement personnalisé d&apos;un an avec Mathilde Torrez</p>
+              <p>✓ Suivi personnalisé d&apos;un an avec Mathilde Torrez</p>
               <p>✓ Accès illimité une fois acheté</p>
               <p>✓ Suivi de progression</p>
               <p>✓ Disponible sur tous vos appareils</p>

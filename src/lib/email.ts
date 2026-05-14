@@ -218,7 +218,7 @@ export function newFormationEmailHtml(opts: {
     <p style="margin:0 0 28px;color:${C.text};font-size:15px;line-height:1.7;">
       ${firstName ? `Bonjour <strong>${firstName}</strong>,` : "Bonjour,"}<br/><br/>
       Une nouvelle formation complète est maintenant disponible sur Prana Motion —
-      vidéos exclusives, livret PDF et un an d'accompagnement personnalisé.
+      vidéos exclusives, livret PDF et un an de suivi personnalisé.
     </p>
 
     <!-- Thumbnail -->

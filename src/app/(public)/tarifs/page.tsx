@@ -9,7 +9,7 @@ export const revalidate = 120;
 const defaultPricingFaq = [
   {
     question: "Quelle est la différence entre les cours et les formations ?",
-    answer: "Les cours vidéo sont des séances individuelles accessibles en location 72h ou en illimité via l'abonnement. Les formations sont des programmes complets avec vidéos exclusives, livret PDF et un accompagnement personnalisé d'un an avec Mathilde Torrez. Les formations sont disponibles uniquement à l'achat.",
+    answer: "Les cours vidéo sont des séances individuelles accessibles en location 72h ou en illimité via l'abonnement. Les formations sont des programmes complets avec vidéos exclusives, livret PDF et un suivi personnalisé d'un an avec Mathilde Torrez. Les formations sont disponibles uniquement à l'achat.",
   },
   {
     question: "Puis-je changer de plan à tout moment ?",
@@ -17,7 +17,7 @@ const defaultPricingFaq = [
   },
   {
     question: "L'abonnement inclut-il les formations ?",
-    answer: "Non, l'abonnement donne accès à l'ensemble des cours vidéo uniquement. Les formations, qui incluent un accompagnement personnalisé avec Mathilde Torrez, sont disponibles à l'achat séparément.",
+    answer: "Non, l'abonnement donne accès à l'ensemble des cours vidéo uniquement. Les formations, qui incluent un suivi personnalisé avec Mathilde Torrez, sont disponibles à l'achat séparément.",
   },
   {
     question: "Comment fonctionne l'annulation ?",

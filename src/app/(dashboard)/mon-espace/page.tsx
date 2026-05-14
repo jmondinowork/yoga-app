@@ -353,7 +353,7 @@ export default async function MonEspacePage() {
             Découvrez nos formations
           </h2>
           <p className="text-sm text-text max-w-md mx-auto">
-            Des programmes exclusifs avec vidéos, livret PDF et un accompagnement personnalisé d&apos;un an avec Mathilde Torrez.
+            Des programmes exclusifs avec vidéos, livret PDF et un suivi personnalisé d&apos;un an avec Mathilde Torrez.
           </p>
           <Link href="/formations">
             <Button>

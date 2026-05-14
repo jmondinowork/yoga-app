@@ -42,7 +42,7 @@ const content: Record<string, string> = {
   courses_heading: "Nos Cours",
   courses_description: "Explorez notre catalogue complet de cours de yoga en ligne. Filtrez par thème et trouvez la séance qui vous convient.",
   formations_heading: "Formations",
-  formations_description: "Des programmes exclusifs avec vidéos, livrets PDF et accompagnement personnalisé.",
+  formations_description: "Des programmes exclusifs avec vidéos, livrets PDF et un suivi personnalisé.",
   pricing_heading: "Nos Tarifs",
   pricing_description: "Choisissez la formule qui vous convient. Location à l\u2019unité ou abonnement illimité — à vous de décider.",
 
@@ -80,7 +80,7 @@ const content: Record<string, string> = {
     {
       question: "Quelle est la différence entre les cours et les formations ?",
       answer:
-        "Les cours vidéo sont des séances individuelles accessibles en location 72h ou en illimité via l'abonnement. Les formations sont des programmes complets avec vidéos exclusives, livret PDF et un accompagnement personnalisé d'un an avec Mathilde Torrez. Les formations sont disponibles uniquement à l'achat.",
+        "Les cours vidéo sont des séances individuelles accessibles en location 72h ou en illimité via l'abonnement. Les formations sont des programmes complets avec vidéos exclusives, livret PDF et un suivi personnalisé d'un an avec Mathilde Torrez. Les formations sont disponibles uniquement à l'achat.",
     },
     {
       question: "Puis-je changer de plan à tout moment ?",
@@ -90,7 +90,7 @@ const content: Record<string, string> = {
     {
       question: "L'abonnement inclut-il les formations ?",
       answer:
-        "Non, l'abonnement donne accès à l'ensemble des cours vidéo uniquement. Les formations, qui incluent un accompagnement personnalisé avec Mathilde Torrez, sont disponibles à l'achat séparément.",
+        "Non, l'abonnement donne accès à l'ensemble des cours vidéo uniquement. Les formations, qui incluent un suivi personnalisé avec Mathilde Torrez, sont disponibles à l'achat séparément.",
     },
     {
       question: "Comment fonctionne l'annulation ?",
@@ -128,7 +128,7 @@ const content: Record<string, string> = {
   seo_courses_title: "Tous les cours de yoga en ligne",
   seo_courses_description: "Explorez notre catalogue complet de cours de yoga en ligne.",
   seo_formations_title: "Formations yoga",
-  seo_formations_description: "Des programmes exclusifs avec vidéos, livrets PDF et accompagnement personnalisé.",
+  seo_formations_description: "Des programmes exclusifs avec vidéos, livrets PDF et un suivi personnalisé.",
   seo_pricing_title: "Tarifs — Prana Motion Yoga",
   seo_pricing_description:
     "Découvrez nos formules d'abonnement et nos tarifs de location de cours. Trouvez le plan qui vous convient.",

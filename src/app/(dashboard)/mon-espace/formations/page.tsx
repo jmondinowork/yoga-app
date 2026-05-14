@@ -103,7 +103,7 @@ export default async function MesFormationsPage() {
         </h1>
         <p className="text-muted">
           {accessibleFormations.length > 0
-            ? "Vos formations avec vidéos exclusives, livret et accompagnement personnalisé."
+            ? "Vos formations avec vidéos exclusives, livret et suivi personnalisé."
             : "Découvrez nos formations pour transformer votre pratique."}
         </p>
       </div>
@@ -121,7 +121,7 @@ export default async function MesFormationsPage() {
           </h2>
           <p className="text-text max-w-lg mx-auto">
             Des programmes exclusifs avec vidéos, livret PDF et un
-            accompagnement personnalisé d&apos;un an avec Mathilde Torrez pour
+            suivi personnalisé d&apos;un an avec Mathilde Torrez pour
             transformer votre pratique.
           </p>
           <Link href="/formations">
